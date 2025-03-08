@@ -1,197 +1,324 @@
-import React, { useEffect, useRef, useState } from 'react';
-import ReadECG from '../utils/ReadECG';
-import { SOP_CLASS_UIDS } from '../constants/Constants';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  DicomECGViewer,
+  ReadECG,
+  SOP_CLASS_UIDS,
+} from 'ecg-dicom-web-viewer';
 
-const ECGViewer = ({ file }) => {
-  const canvasRef = useRef(null);
-  const containerRef = useRef(null);
+const ECGViewer = () => {
   const [error, setError] = useState(null);
+  const [isConverting, setIsConverting] = useState(false);
+  const [conversionProgress, setConversionProgress] = useState(0);
+  const [currentTaskId, setCurrentTaskId] = useState(null);
+  const [statusMessage, setStatusMessage] = useState('');
+  const [showProgress, setShowProgress] = useState(false);
+  const [convertedDicomUrl, setConvertedDicomUrl] = useState(null);
+  const statusCheckIntervalRef = useRef(null);
+  const viewerRef = useRef(null);
+  const containerId = 'ecg-container';
 
   useEffect(() => {
+    return () => {
+      if (statusCheckIntervalRef.current) {
+        clearInterval(statusCheckIntervalRef.current);
+      }
+      if (viewerRef.current) {
+        const container = document.getElementById(containerId);
+        if (container) {
+          container.innerHTML = '';
+        }
+        viewerRef.current = null;
+      }
+    };
+  }, []);
+
+  const loadDicomFile = async (arrayBuffer) => {
+    try {
+      const container = document.getElementById(containerId);
+      if (!container) {
+        console.error('Container not found');
+        return;
+      }
+
+      // 清除现有内容
+      while (container.firstChild) {
+        container.removeChild(container.firstChild);
+      }
+
+      // 创建canvas元素
+      const canvas = document.createElement('canvas');
+      const canvasId = 'ecg-canvas-' + Date.now();  // 生成唯一ID
+      canvas.id = canvasId;
+      canvas.style.width = '100%';
+      canvas.style.height = '100%';
+      container.appendChild(canvas);
+
+      // 创建新的ECG查看器实例
+      const viewer = new DicomECGViewer(
+        arrayBuffer,     // DICOM数据
+        canvasId,       // canvas 元素的 ID
+        0               // 视图索引
+      );
+
+      // 保存viewer引用
+      viewerRef.current = viewer;
+
+      // 加载视图
+      await viewer.loadCanvas();
+      
+    } catch (error) {
+      console.error('加载ECG失败:', error);
+      setError(`加载ECG失败: ${error.message}`);
+    }
+  };
+
+  const handleFileChange = (event) => {
+    const file = event.target.files[0];
     if (!file) return;
 
-    console.log('Processing file:', file.name);
+    // 直接读取文件并显示
     const reader = new FileReader();
-    
-    reader.onerror = (error) => {
-      console.error('FileReader error:', error);
-      setError('文件读取错误：' + error.message);
-    };
-
     reader.onload = async (e) => {
       try {
-        console.log('File loaded, size:', e.target.result.byteLength);
         const arrayBuffer = e.target.result;
-        
-        console.log('Creating ECG reader...');
-        const ecgReader = new ReadECG(arrayBuffer, '', {
-          speed: 25,
-          amplitude: 10,
-          applyLowPassFilter: true
-        });
-
-        console.log('Getting waveform and info...');
-        const waveform = ecgReader.getWaveform();
-        const info = ecgReader.getInfo();
-
-        if (!ecgReader.elements.SOPClassUID) {
-          setError('无法识别的DICOM文件格式');
-          return;
-        }
-
-        if (!SOP_CLASS_UIDS.includes(ecgReader.elements.SOPClassUID)) {
-          setError('此DICOM文件不是ECG类型');
-          return;
-        }
-
-        if (!waveform) {
-          setError('无法读取波形数据');
-          return;
-        }
-
-        console.log('Drawing ECG...');
-        drawECG(waveform, ecgReader.elements.SOPClassUID);
-        displayInfo(info, ecgReader.elements);
+        await loadDicomFile(arrayBuffer);
         setError(null);
-      } catch (err) {
-        console.error('Error processing ECG:', err);
-        setError('处理ECG数据时出错：' + err.message);
+      } catch (error) {
+        console.error('读取文件失败:', error);
+        setError(`读取文件失败: ${error.message}`);
       }
     };
-
     reader.readAsArrayBuffer(file);
-  }, [file]);
-
-  const drawECG = (waveform, sopClassUID) => {
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    const width = canvas.width;
-    const height = canvas.height;
-
-    // 清除画布
-    ctx.clearRect(0, 0, width, height);
-
-    if (!SOP_CLASS_UIDS.includes(sopClassUID)) {
-      ctx.font = '24px Arial';
-      ctx.fillText('不兼容的ECG格式', width/2 - 100, height/2);
-      return;
-    }
-
-    // 绘制网格
-    drawGrid(ctx, width, height);
-
-    // 绘制ECG波形
-    ctx.beginPath();
-    ctx.strokeStyle = 'black';
-    ctx.lineWidth = 1.5;
-
-    const scaleY = height / 2000; // 振幅缩放
-    const scaleX = width / waveform.length; // 时间缩放
-
-    waveform.forEach((value, index) => {
-      const x = index * scaleX;
-      const y = height/2 - value * scaleY;
-      
-      if (index === 0) {
-        ctx.moveTo(x, y);
-      } else {
-        ctx.lineTo(x, y);
-      }
-    });
-
-    ctx.stroke();
   };
 
-  const drawGrid = (ctx, width, height) => {
-    ctx.beginPath();
-    ctx.strokeStyle = '#ddd';
-    ctx.lineWidth = 0.5;
+  const handleCtUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
 
-    // 绘制水平线
-    for (let y = 0; y < height; y += 20) {
-      ctx.moveTo(0, y);
-      ctx.lineTo(width, y);
-    }
-
-    // 绘制垂直线
-    for (let x = 0; x < width; x += 20) {
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, height);
-    }
-
-    ctx.stroke();
-
-    // 绘制主网格
-    ctx.beginPath();
-    ctx.strokeStyle = '#aaa';
-    ctx.lineWidth = 1;
-
-    for (let y = 0; y < height; y += 100) {
-      ctx.moveTo(0, y);
-      ctx.lineTo(width, y);
-    }
-
-    for (let x = 0; x < width; x += 100) {
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, height);
-    }
-
-    ctx.stroke();
-  };
-
-  const displayInfo = (waveInfo, elements) => {
-    if (!containerRef.current) return;
+    setIsConverting(true);
+    setError(null);
+    setConversionProgress(0);
+    setShowProgress(true);
+    setConvertedDicomUrl(null); // 重置URL
     
-    const container = containerRef.current;
-    container.innerHTML = '';
+    const formData = new FormData();
+    formData.append('file', file);
 
-    // 患者信息
-    const patientInfo = document.createElement('div');
-    patientInfo.innerHTML = `
-      <h3>患者信息</h3>
-      <p>姓名: ${elements.PatientName || '未知'}</p>
-      <p>ID: ${elements.PatientID || '未知'}</p>
-      <p>性别: ${elements.PatientSex || '未知'}</p>
-      <p>检查日期: ${elements.StudyDate || '未知'}</p>
-      <p>模态: ${elements.Modality || '未知'}</p>
-      <p>SOP Class UID: ${elements.SOPClassUID || '未知'}</p>
-    `;
-    container.appendChild(patientInfo);
+    try {
+      const uploadResponse = await fetch('http://localhost:8000/upload', {
+        method: 'POST',
+        body: formData
+      });
 
-    // 波形信息
-    if (waveInfo && waveInfo.length > 0) {
-      const waveformInfo = document.createElement('div');
-      waveformInfo.innerHTML = `
-        <h3>波形信息</h3>
-        ${waveInfo.map(info => `<p>${info.key}: ${info.value || '未知'}${info.unit}</p>`).join('')}
-      `;
-      container.appendChild(waveformInfo);
+      if (!uploadResponse.ok) {
+        throw new Error(`上传失败: ${uploadResponse.statusText}`);
+      }
+
+      const uploadData = await uploadResponse.json();
+      const taskId = uploadData.task_id;
+      setCurrentTaskId(taskId);
+      setStatusMessage(`文件已上传，正在处理中...\n任务ID: ${taskId}`);
+
+      // 清除之前的定时器
+      if (statusCheckIntervalRef.current) {
+        clearInterval(statusCheckIntervalRef.current);
+        statusCheckIntervalRef.current = null;
+      }
+
+      // 设置新的定时器
+      statusCheckIntervalRef.current = setInterval(() => {
+        fetch(`http://localhost:8000/status/${taskId}`)
+          .then(response => {
+            if (!response.ok) {
+              throw new Error(`获取状态失败: ${response.statusText}`);
+            }
+            return response.json();
+          })
+          .then(data => {
+            console.log('状态检查响应:', data);
+            
+            let statusText = `状态: ${data.status}\n`;
+            if (data.message) {
+              statusText += `消息: ${data.message}\n`;
+            }
+            if (data.error) {
+              statusText += `错误: ${data.error}\n`;
+              throw new Error(data.error);
+            }
+            setStatusMessage(statusText);
+
+            if (data.status === 'completed') {
+              // 立即清除定时器
+              if (statusCheckIntervalRef.current) {
+                clearInterval(statusCheckIntervalRef.current);
+                statusCheckIntervalRef.current = null;
+              }
+              
+              if (data.dicom_files && data.dicom_files.length > 0) {
+                const downloadUrl = `http://localhost:8000/download/${taskId}/${data.dicom_files[0]}`;
+                console.log('设置下载URL:', downloadUrl);
+                setConvertedDicomUrl(downloadUrl);
+                statusText += `\n转换完成！\n`;
+                statusText += `文件下载地址: ${downloadUrl}\n`;
+                setStatusMessage(statusText);
+                setConversionProgress(100);
+                setIsConverting(false);
+              } else {
+                console.error('没有找到dicom_files字段或为空:', data);
+                setError('服务器没有返回DICOM文件信息');
+              }
+            } else if (data.status === 'processing') {
+              setConversionProgress(50);
+            } else if (data.status === 'failed') {
+              // 处理失败状态
+              if (statusCheckIntervalRef.current) {
+                clearInterval(statusCheckIntervalRef.current);
+                statusCheckIntervalRef.current = null;
+              }
+              setError(`转换失败: ${data.error || '未知错误'}`);
+              setIsConverting(false);
+            }
+          })
+          .catch(error => {
+            console.error('状态检查失败:', error);
+            setStatusMessage(`错误: ${error.message}`);
+            setShowProgress(false);
+            clearInterval(statusCheckIntervalRef.current);
+            statusCheckIntervalRef.current = null;
+            setIsConverting(false);
+            setConversionProgress(0);
+          });
+      }, 1000);
+
+    } catch (error) {
+      setStatusMessage(`错误: ${error.message}`);
+      setShowProgress(false);
+      setIsConverting(false);
+      setConversionProgress(0);
+    }
+  };
+
+  const handleViewConverted = async () => {
+    if (!convertedDicomUrl) return;
+    
+    try {
+      const response = await fetch(convertedDicomUrl);
+      if (!response.ok) {
+        throw new Error(`下载失败: ${response.statusText}`);
+      }
+      const buffer = await response.arrayBuffer();
+      await loadDicomFile(buffer);
+      setError(null);
+    } catch (error) {
+      console.error('加载DICOM文件失败:', error);
+      setError(`加载DICOM文件失败: ${error.message}`);
     }
   };
 
   return (
-    <div className="ecg-viewer">
+    <div style={{ width: '100%', height: '600px', position: 'relative', margin: '20px 0' }}>
+      <div style={{ marginBottom: '20px', display: 'flex', gap: '20px' }}>
+        <div>
+          <h4 style={{ marginBottom: '8px' }}>上传DICOM文件</h4>
+          <input
+            type="file"
+            accept=".dcm"
+            onChange={handleFileChange}
+            style={{ 
+              padding: '8px',
+              border: '1px solid #d9d9d9',
+              borderRadius: '4px',
+              backgroundColor: '#fafafa'
+            }}
+          />
+        </div>
+        <div>
+          <h4 style={{ marginBottom: '8px' }}>上传CT扫描转换</h4>
+          <input
+            type="file"
+            onChange={handleCtUpload}
+            style={{ 
+              padding: '8px',
+              border: '1px solid #d9d9d9',
+              borderRadius: '4px',
+              backgroundColor: '#fafafa'
+            }}
+          />
+          {showProgress && (
+            <div>
+              <div style={{ 
+                marginTop: '10px',
+                width: '100%',
+                height: '20px',
+                backgroundColor: '#f0f0f0',
+                borderRadius: '10px',
+                overflow: 'hidden'
+              }}>
+                <div style={{
+                  width: `${conversionProgress}%`,
+                  height: '100%',
+                  backgroundColor: '#4CAF50',
+                  transition: 'width 0.3s ease'
+                }} />
+              </div>
+              {statusMessage && (
+                <div 
+                  style={{ 
+                    marginTop: '10px',
+                    padding: '10px',
+                    backgroundColor: '#fff',
+                    border: '1px solid #d9d9d9',
+                    borderRadius: '4px',
+                    whiteSpace: 'pre-wrap'
+                  }}>
+                  <div>{statusMessage}</div>
+                  {convertedDicomUrl && (
+                    <button
+                      onClick={handleViewConverted}
+                      style={{
+                        display: 'block',
+                        marginTop: '10px',
+                        padding: '8px 16px',
+                        backgroundColor: '#1890ff',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      在查看器中显示
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+      <div 
+        id={containerId}
+        style={{ 
+          width: '100%', 
+          height: '100%',
+          border: '1px solid #d9d9d9',
+          borderRadius: '4px',
+          overflow: 'hidden',
+          position: 'relative',
+          backgroundColor: '#fff'
+        }}
+      />
       {error && (
-        <div className="error-message" style={{
-          color: 'red',
-          marginBottom: '20px',
+        <div style={{ 
+          color: 'red', 
+          marginTop: '10px',
           padding: '10px',
-          border: '1px solid red',
+          backgroundColor: '#fff8f8',
+          border: '1px solid #ffcdd2',
           borderRadius: '4px'
         }}>
           {error}
         </div>
       )}
-      <div ref={containerRef} className="info-container"></div>
-      <canvas
-        ref={canvasRef}
-        width={800}
-        height={600}
-        style={{
-          border: '1px solid #ccc',
-          marginTop: '20px'
-        }}
-      />
     </div>
   );
 };
