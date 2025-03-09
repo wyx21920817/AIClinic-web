@@ -4,7 +4,7 @@ import ECGViewer from '../components/ECGViewer';
 const ECGViewerPage = () => {
   return (
     <div className="page-container" style={{ padding: '20px' }}>
-      <h2 style={{ marginBottom: '20px' }}>心电图查看</h2>
+      <h2 style={{ marginBottom: '20px' }}>ECG Viewer</h2>
       <div style={{ 
         marginTop: '20px',
         minHeight: '400px',

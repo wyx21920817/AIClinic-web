@@ -15,7 +15,7 @@ const DicomUploader = ({ onFileUpload }) => {
 
   const uploadFile = async (file) => {
     if (!file.name.toLowerCase().endsWith('.dcm')) {
-      alert('请上传.dcm格式的DICOM文件');
+      alert('Please upload a .dcm format DICOM file');
       return;
     }
     
@@ -56,28 +56,44 @@ const DicomUploader = ({ onFileUpload }) => {
       onDrop={handleDrop}
     >
       <div className="upload-area">
+        <label 
+          htmlFor="dicom-upload" 
+          className="upload-button"
+          disabled={uploading}
+          style={{
+            display: 'inline-block',
+            padding: '8px 16px',
+            backgroundColor: '#1976d2',
+            color: 'white',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            marginBottom: '10px'
+          }}
+        >
+          Select DICOM file
+        </label>
         <input
+          id="dicom-upload"
           type="file"
           accept=".dcm"
           onChange={handleFileChange}
-          ref={fileInputRef}
-          style={{ display: 'none' }}
+          style={{ 
+            width: '0.1px',
+            height: '0.1px',
+            opacity: 0,
+            overflow: 'hidden',
+            position: 'absolute',
+            zIndex: -1
+          }}
         />
         {uploading ? (
           <div className="upload-status">
             <div className="loading-spinner"></div>
-            <p>正在上传DICOM文件...</p>
+            <p>Uploading DICOM file...</p>
           </div>
         ) : (
           <>
-            <button 
-              onClick={() => fileInputRef.current.click()}
-              className="upload-button"
-              disabled={uploading}
-            >
-              选择DICOM文件
-            </button>
-            <p>或将DICOM文件拖放到此处</p>
+            <p>or drag and drop DICOM file here</p>
           </>
         )}
       </div>

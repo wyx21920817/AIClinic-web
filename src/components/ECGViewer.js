@@ -72,7 +72,7 @@ const ECGViewer = () => {
     }
   };
 
-  const handleFileChange = (event) => {
+  const handleDicomUpload = (event) => {
     const file = event.target.files[0];
     if (!file) return;
 
@@ -219,80 +219,63 @@ const ECGViewer = () => {
     <div style={{ width: '100%', height: '600px', position: 'relative', margin: '20px 0' }}>
       <div style={{ marginBottom: '20px', display: 'flex', gap: '20px' }}>
         <div>
-          <h4 style={{ marginBottom: '8px' }}>上传DICOM文件</h4>
+          <h4 style={{ marginBottom: '8px' }}>Upload DICOM File</h4>
+          <label 
+            htmlFor="dicom-file" 
+            style={{ 
+              padding: '8px 16px',
+              backgroundColor: '#1976d2',
+              color: 'white',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              display: 'inline-block'
+            }}
+          >
+            Choose File
+          </label>
           <input
+            id="dicom-file"
             type="file"
             accept=".dcm"
-            onChange={handleFileChange}
+            onChange={handleDicomUpload}
             style={{ 
-              padding: '8px',
-              border: '1px solid #d9d9d9',
-              borderRadius: '4px',
-              backgroundColor: '#fafafa'
+              width: '0.1px',
+              height: '0.1px',
+              opacity: 0,
+              overflow: 'hidden',
+              position: 'absolute',
+              zIndex: -1
             }}
           />
         </div>
         <div>
-          <h4 style={{ marginBottom: '8px' }}>上传CT扫描转换</h4>
+          <h4 style={{ marginBottom: '8px' }}>Upload CT Scan for Conversion</h4>
+          <label 
+            htmlFor="ct-file" 
+            style={{ 
+              padding: '8px 16px',
+              backgroundColor: '#1976d2',
+              color: 'white',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              display: 'inline-block'
+            }}
+          >
+            Choose File
+          </label>
           <input
+            id="ct-file"
             type="file"
             onChange={handleCtUpload}
             style={{ 
-              padding: '8px',
-              border: '1px solid #d9d9d9',
-              borderRadius: '4px',
-              backgroundColor: '#fafafa'
+              width: '0.1px',
+              height: '0.1px',
+              opacity: 0,
+              overflow: 'hidden',
+              position: 'absolute',
+              zIndex: -1
             }}
           />
-          {showProgress && (
-            <div>
-              <div style={{ 
-                marginTop: '10px',
-                width: '100%',
-                height: '20px',
-                backgroundColor: '#f0f0f0',
-                borderRadius: '10px',
-                overflow: 'hidden'
-              }}>
-                <div style={{
-                  width: `${conversionProgress}%`,
-                  height: '100%',
-                  backgroundColor: '#4CAF50',
-                  transition: 'width 0.3s ease'
-                }} />
-              </div>
-              {statusMessage && (
-                <div 
-                  style={{ 
-                    marginTop: '10px',
-                    padding: '10px',
-                    backgroundColor: '#fff',
-                    border: '1px solid #d9d9d9',
-                    borderRadius: '4px',
-                    whiteSpace: 'pre-wrap'
-                  }}>
-                  <div>{statusMessage}</div>
-                  {convertedDicomUrl && (
-                    <button
-                      onClick={handleViewConverted}
-                      style={{
-                        display: 'block',
-                        marginTop: '10px',
-                        padding: '8px 16px',
-                        backgroundColor: '#1890ff',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      在查看器中显示
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
         </div>
       </div>
       <div 
@@ -307,6 +290,55 @@ const ECGViewer = () => {
           backgroundColor: '#fff'
         }}
       />
+      {showProgress && (
+        <div>
+          <div style={{ 
+            marginTop: '10px',
+            width: '100%',
+            height: '20px',
+            backgroundColor: '#f0f0f0',
+            borderRadius: '10px',
+            overflow: 'hidden'
+          }}>
+            <div style={{
+              width: `${conversionProgress}%`,
+              height: '100%',
+              backgroundColor: '#4CAF50',
+              transition: 'width 0.3s ease'
+            }} />
+          </div>
+          {statusMessage && (
+            <div 
+              style={{ 
+                marginTop: '10px',
+                padding: '10px',
+                backgroundColor: '#fff',
+                border: '1px solid #d9d9d9',
+                borderRadius: '4px',
+                whiteSpace: 'pre-wrap'
+              }}>
+              <div>{statusMessage}</div>
+              {convertedDicomUrl && (
+                <button
+                  onClick={handleViewConverted}
+                  style={{
+                    display: 'block',
+                    marginTop: '10px',
+                    padding: '8px 16px',
+                    backgroundColor: '#1890ff',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  View in Viewer
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
       {error && (
         <div style={{ 
           color: 'red', 

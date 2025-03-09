@@ -23,7 +23,7 @@ class ReadECG {
       const dataSet = dicomParser.parseDicom(byteArray);
       console.log('DICOM parsed successfully');
 
-      // 读取并打印所有可用的标签
+      // Read and print all available tags
       console.log('Available tags:');
       for (let tag in dataSet.elements) {
         console.log(tag, ':', dataSet.string(tag));
@@ -38,7 +38,7 @@ class ReadECG {
         StudyDate: dataSet.string('x00080020'),
         SOPClassUID: dataSet.string('x00080016'),
         Modality: dataSet.string('x00080060'),
-        // ECG特定标签
+        // ECG specific tags
         WaveformSequence: dataSet.elements['x54000100'],
         WaveformData: dataSet.elements['x54001010'],
         ChannelMinimumValue: dataSet.elements['x54001004'],
@@ -48,13 +48,13 @@ class ReadECG {
 
       console.log('Parsed elements:', this.elements);
 
-      // 检查波形数据
+      // Check waveform data
       if (this.elements.WaveformSequence) {
         console.log('Found WaveformSequence');
         const waveformSequence = dataSet.elements['x54000100'];
         console.log('WaveformSequence:', waveformSequence);
         
-        // 尝试不同的方法读取波形数据
+        // Try different methods to read waveform data
         if (this.elements.WaveformData) {
           console.log('Found WaveformData directly');
           const waveformData = this.elements.WaveformData;

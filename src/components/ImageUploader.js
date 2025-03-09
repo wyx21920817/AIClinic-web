@@ -59,7 +59,7 @@ const ImageUploader = ({ onDicomReceived }) => {
     });
 
     if (!file.type.startsWith('image/')) {
-      const errorMsg = `不支持的文件类型: ${file.type}，请选择图片文件`;
+      const errorMsg = `Unsupported file type: ${file.type}, please select an image file`;
       console.error(errorMsg);
       setError(errorMsg);
       return;
@@ -67,15 +67,15 @@ const ImageUploader = ({ onDicomReceived }) => {
 
     setLoading(true);
     setError(null);
-    setProgress('上传图片中...');
+    setProgress('Uploading image...');
     setConvertedFiles([]);
 
     try {
       // 1. 上传图片
       const uploadResult = await uploadImage(file);
-      console.log('文件上传成功，任务ID:', uploadResult.task_id);
+      console.log('File upload successful, task ID:', uploadResult.task_id);
       setTaskId(uploadResult.task_id);
-      setProgress('正在转换为DICOM...');
+      setProgress('Converting to DICOM...');
 
       // 2. 开始定期检查状态
       if (statusCheckInterval) {
@@ -90,7 +90,7 @@ const ImageUploader = ({ onDicomReceived }) => {
           if (status.status === 'completed') {
             clearInterval(intervalId);
             setStatusCheckInterval(null);
-            setProgress('转换完成');
+            setProgress('Conversion complete');
             setConvertedFiles(status.dicom_files || []);
             
             // 如果有转换后的文件，下载第一个文件并传递给查看器
@@ -104,9 +104,9 @@ const ImageUploader = ({ onDicomReceived }) => {
           } else if (status.status === 'failed') {
             clearInterval(intervalId);
             setStatusCheckInterval(null);
-            throw new Error(status.error || '转换失败');
+            throw new Error(status.error || 'Conversion failed');
           } else {
-            setProgress(`正在处理: ${status.message || '转换中...'}`);
+            setProgress(`Processing: ${status.message || 'Converting...'}`);
           }
         } catch (err) {
           clearInterval(intervalId);
@@ -117,8 +117,8 @@ const ImageUploader = ({ onDicomReceived }) => {
 
       setStatusCheckInterval(intervalId);
     } catch (err) {
-      console.error('处理失败:', err);
-      setError(`处理失败: ${err.message}`);
+      console.error('Processing failed:', err);
+      setError(`Processing failed: ${err.message}`);
       setLoading(false);
       setProgress('');
     }
@@ -139,7 +139,7 @@ const ImageUploader = ({ onDicomReceived }) => {
           htmlFor="image-input" 
           className={`upload-button ${loading ? 'disabled' : ''}`}
         >
-          {loading ? '处理中...' : '上传图片'}
+          {loading ? 'Processing...' : 'Upload Image'}
         </label>
       </div>
       
@@ -151,7 +151,7 @@ const ImageUploader = ({ onDicomReceived }) => {
       
       {convertedFiles.length > 0 && (
         <div className="converted-files">
-          <h4>转换后的文件:</h4>
+          <h4>Converted Files:</h4>
           <ul>
             {convertedFiles.map((file, index) => {
               const fileName = file.split('/').pop();
@@ -164,11 +164,11 @@ const ImageUploader = ({ onDicomReceived }) => {
                         const dicomBlob = await downloadDicomFile(taskId, fileName);
                         await handleDicomFile(dicomBlob, fileName);
                       } catch (err) {
-                        setError(`下载失败: ${err.message}`);
+                        setError(`Download failed: ${err.message}`);
                       }
                     }}
                   >
-                    查看
+                    View
                   </button>
                 </li>
               );
@@ -179,9 +179,9 @@ const ImageUploader = ({ onDicomReceived }) => {
       
       {error && (
         <div className="error-message">
-          <div>错误信息：</div>
+          <div>Error Message:</div>
           <pre>{error}</pre>
-          <div className="error-hint">按F12打开浏览器控制台查看详细错误信息</div>
+          <div className="error-hint">Press F12 to open browser console for detailed error information</div>
         </div>
       )}
     </div>
