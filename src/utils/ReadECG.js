@@ -22,7 +22,7 @@ class ReadECG {
       
       const dataSet = dicomParser.parseDicom(byteArray);
       
-      // 检查关键标签
+      // Check key tags
       const criticalTags = {
         'TransferSyntaxUID': 'x00020010',
         'SOPClassUID': 'x00080016',
@@ -30,7 +30,7 @@ class ReadECG {
         'WaveformSequence': 'x54000100'
       };
 
-      // 分析标签
+      // Analyze tags
       const tagAnalysis = {};
       for (const [name, tag] of Object.entries(criticalTags)) {
         const element = dataSet.elements[tag];
@@ -48,7 +48,7 @@ class ReadECG {
       }
       console.log('Tag Analysis:', tagAnalysis);
 
-      // 保存关键参数
+      // Save key parameters
       this.elements = {
         TransferSyntaxUID: dataSet.string('x00020010'),
         SOPClassUID: dataSet.string('x00080016'),
@@ -56,7 +56,7 @@ class ReadECG {
         WaveformSequence: dataSet.elements['x54000100']
       };
 
-      // 分析波形序列
+      // Analyze waveform sequence
       if (this.elements.WaveformSequence) {
         const sequenceInfo = {
           length: this.elements.WaveformSequence.length,
@@ -67,7 +67,7 @@ class ReadECG {
         console.log('WaveformSequence Info:', sequenceInfo);
 
         if (this.elements.WaveformSequence.items) {
-          // 遍历所有序列项
+          // Iterate through all sequence items
           for (let i = 0; i < this.elements.WaveformSequence.items.length; i++) {
             const item = this.elements.WaveformSequence.items[i];
             console.log(`Analyzing Item ${i}:`, {
@@ -76,21 +76,21 @@ class ReadECG {
               elements: Object.keys(item.elements || {})
             });
 
-            // 直接从项的字节范围中解析数据集
+            // Parse data set directly from item's byte range
             try {
               const itemData = byteArray.slice(item.dataOffset, item.dataOffset + item.length);
               console.log(`Item ${i} data sample:`, Array.from(itemData.slice(0, 32)).map(b => b.toString(16).padStart(2, '0')).join(' '));
 
-              // 检查是否为显式VR
+              // Check if explicit VR
               const isExplicitVR = this.elements.TransferSyntaxUID && 
                                  this.elements.TransferSyntaxUID.includes('1.2.840.10008.1.2.1');
               console.log('Transfer Syntax:', this.elements.TransferSyntaxUID);
               console.log('Using Explicit VR:', isExplicitVR);
 
-              // 解析项中的所有标签
+              // Parse all tags in item
               let offset = 0;
-              while (offset < itemData.length - 8) { // 至少需要8字节
-                // 读取组号和元素号
+              while (offset < itemData.length - 8) { // At least 8 bytes needed
+                // Read group and element numbers
                 const group = itemData[offset] + (itemData[offset + 1] << 8);
                 const element = itemData[offset + 2] + (itemData[offset + 3] << 8);
                 const tag = `(${group.toString(16).padStart(4, '0')},${element.toString(16).padStart(4, '0')})`;
@@ -100,36 +100,36 @@ class ReadECG {
                 let vr = '';
 
                 if (isExplicitVR) {
-                  // 显式VR格式
+                  // Explicit VR format
                   vr = String.fromCharCode(itemData[offset + 4], itemData[offset + 5]);
                   
                   if (['OB', 'OW', 'OF', 'SQ', 'UT', 'UN'].includes(vr)) {
-                    // 这些VR使用32位长度字段，需要2字节填充
+                    // These VRs use 32-bit length field, need 2 bytes padding
                     valueLength = itemData[offset + 8] + 
                                 (itemData[offset + 9] << 8) +
                                 (itemData[offset + 10] << 16) +
                                 (itemData[offset + 11] << 24);
                     dataStart = offset + 12;
                   } else {
-                    // 其他VR使用16位长度字段
+                    // Other VRs use 16-bit length field
                     valueLength = itemData[offset + 6] + (itemData[offset + 7] << 8);
                     dataStart = offset + 8;
                   }
                 } else {
-                  // 隐式VR格式
+                  // Implicit VR format
                   valueLength = itemData[offset + 4] + 
                               (itemData[offset + 5] << 8) +
                               (itemData[offset + 6] << 16) +
                               (itemData[offset + 7] << 24);
                   dataStart = offset + 8;
                   
-                  // 根据标签推断VR
+                  // Infer VR from tag
                   if (group === 0x5400 && element === 0x1010) {
                     vr = 'OW';
                   }
                 }
 
-                // 验证长度是否合理
+                // Verify length is reasonable
                 if (valueLength > itemData.length - dataStart) {
                   console.log(`Invalid length ${valueLength} for tag ${tag} (VR: ${vr}) at offset ${offset}, skipping to next item`);
                   break;
@@ -138,32 +138,32 @@ class ReadECG {
                 const vrInfo = vr ? ` (VR: ${vr})` : '';
                 console.log(`Found tag ${tag}${vrInfo} at offset ${offset}, length ${valueLength}, data starts at ${dataStart}`);
 
-                // 如果是波形数据标签 (5400,1010)
+                // If waveform data tag (5400,1010)
                 if (group === 0x5400 && element === 0x1010) {
                   console.log(`Found waveform data at offset ${offset}, length ${valueLength}`);
                   
                   const waveformDataBuffer = itemData.slice(dataStart, dataStart + valueLength);
 
-                  // 打印前32个字节用于调试
+                  // Print first 32 bytes for debugging
                   console.log('Waveform data sample:', Array.from(waveformDataBuffer.slice(0, 32)).map(b => b.toString(16).padStart(2, '0')).join(' '));
 
-                  // 检查是否为16位数据
-                  const bitsAllocated = 16; // 默认使用16位
+                  // Check if 16-bit data
+                  const bitsAllocated = 16; // Default to 16-bit
                   if (bitsAllocated === 16) {
-                    // 创建16位整数数组
+                    // Create 16-bit integer array
                     const dataView = new DataView(waveformDataBuffer.buffer, 
                                                 waveformDataBuffer.byteOffset, 
                                                 waveformDataBuffer.length);
                     const samples = new Int16Array(waveformDataBuffer.length / 2);
                     
-                    // 读取每个样本
+                    // Read each sample
                     for (let k = 0; k < samples.length; k++) {
-                      samples[k] = dataView.getInt16(k * 2, true); // true表示小端字节序
+                      samples[k] = dataView.getInt16(k * 2, true); // true indicates little-endian
                     }
                     
                     this.waveformData = samples;
 
-                    // 分析波形数据
+                    // Analyze waveform data
                     const dataAnalysis = {
                       length: this.waveformData.length,
                       firstValues: Array.from(this.waveformData.slice(0, 10)),
@@ -175,7 +175,7 @@ class ReadECG {
                   }
                 }
 
-                // 移动到下一个标签
+                // Move to next tag
                 offset = dataStart + valueLength;
               }
             } catch (error) {
@@ -187,12 +187,12 @@ class ReadECG {
         throw new Error('No WaveformSequence found in DICOM file');
       }
 
-      // 验证波形数据
+      // Validate waveform data
       if (!this.waveformData || this.waveformData.length === 0) {
         throw new Error('No valid waveform data found in DICOM file');
       }
 
-      // 返回成功
+      // Return success
       return true;
     } catch (error) {
       console.error('Error parsing DICOM data:', error);

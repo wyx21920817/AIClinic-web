@@ -9,7 +9,7 @@ const ImageUploader = ({ onDicomReceived }) => {
   const [statusCheckInterval, setStatusCheckInterval] = useState(null);
   const [convertedFiles, setConvertedFiles] = useState([]);
 
-  // 清理定时器
+  // Clear timer
   useEffect(() => {
     return () => {
       if (statusCheckInterval) {
@@ -19,27 +19,27 @@ const ImageUploader = ({ onDicomReceived }) => {
   }, [statusCheckInterval]);
 
   const handleDicomFile = async (blob, fileName) => {
-    console.log('处理DICOM文件:', {
+    console.log('Processing DICOM file:', {
       size: blob.size,
       type: blob.type
     });
 
-    // 确保文件类型正确
+    // Ensure correct file type
     const dicomFile = new File([blob], fileName, { 
       type: 'application/dicom',
       lastModified: new Date().getTime()
     });
 
-    console.log('创建DICOM文件:', {
+    console.log('Created DICOM file:', {
       name: dicomFile.name,
       type: dicomFile.type,
       size: dicomFile.size,
       lastModified: new Date(dicomFile.lastModified).toISOString()
     });
 
-    // 创建URL以便调试
+    // Create URL for debugging
     const url = URL.createObjectURL(dicomFile);
-    console.log('文件URL:', url);
+    console.log('File URL:', url);
 
     onDicomReceived(dicomFile);
   };
@@ -47,12 +47,12 @@ const ImageUploader = ({ onDicomReceived }) => {
   const handleFileUpload = async (event) => {
     const file = event.target.files[0];
     if (!file) {
-      console.log('没有选择文件');
+      console.log('No file selected');
       return;
     }
 
-    // 检查文件类型
-    console.log('选择的文件:', {
+    // Check file type
+    console.log('Selected file:', {
       name: file.name,
       type: file.type,
       size: `${(file.size / 1024).toFixed(2)} KB`
@@ -71,13 +71,13 @@ const ImageUploader = ({ onDicomReceived }) => {
     setConvertedFiles([]);
 
     try {
-      // 1. 上传图片
+      // 1. Upload image
       const uploadResult = await uploadImage(file);
       console.log('File upload successful, task ID:', uploadResult.task_id);
       setTaskId(uploadResult.task_id);
       setProgress('Converting to DICOM...');
 
-      // 2. 开始定期检查状态
+      // 2. Start periodic status check
       if (statusCheckInterval) {
         clearInterval(statusCheckInterval);
       }
@@ -85,7 +85,7 @@ const ImageUploader = ({ onDicomReceived }) => {
       const intervalId = setInterval(async () => {
         try {
           const status = await checkTaskStatus(uploadResult.task_id);
-          console.log('转换状态:', status);
+          console.log('Conversion status:', status);
 
           if (status.status === 'completed') {
             clearInterval(intervalId);
@@ -93,7 +93,7 @@ const ImageUploader = ({ onDicomReceived }) => {
             setProgress('Conversion complete');
             setConvertedFiles(status.dicom_files || []);
             
-            // 如果有转换后的文件，下载第一个文件并传递给查看器
+            // If there are converted files, download the first file and pass it to the viewer
             if (status.dicom_files && status.dicom_files.length > 0) {
               const fileName = status.dicom_files[0].split('/').pop();
               const dicomBlob = await downloadDicomFile(uploadResult.task_id, fileName);

@@ -43,11 +43,11 @@ const ECGViewer = () => {
       const fileName = event?.target?.files?.[0]?.name || 'unknown';
       console.log(`========== Analyzing DICOM File: ${fileName} ==========`);
       
-      // 解析DICOM数据以获取详细信息
+      // Parse DICOM data to get detailed information
       const byteArray = new Uint8Array(arrayBuffer);
       const dataSet = dicomParser.parseDicom(byteArray);
       
-      // 打印关键标签信息
+      // Print key tag information
       const transferSyntax = dataSet.string('x00020010');
       const sopClassUid = dataSet.string('x00080016');
       const modality = dataSet.string('x00080060');
@@ -56,7 +56,7 @@ const ECGViewer = () => {
       console.log('SOP Class UID:', sopClassUid);
       console.log('Modality:', modality);
       
-      // 获取波形序列
+      // Get waveform sequence
       const waveformSequence = dataSet.elements['x54000100'];
       if (waveformSequence) {
         console.log('WaveformSequence Info:', {
@@ -64,7 +64,7 @@ const ECGViewer = () => {
           items: waveformSequence.items ? waveformSequence.items.length : 0
         });
 
-        // 遍历所有波形序列项
+        // Iterate through all waveform sequence items
         if (waveformSequence.items) {
           for (let i = 0; i < waveformSequence.items.length; i++) {
             const item = waveformSequence.items[i];
@@ -73,26 +73,26 @@ const ECGViewer = () => {
               dataOffset: item.dataOffset
             });
 
-            // 从序列项中读取波形数据
+            // Read waveform data from sequence item
             const itemData = byteArray.slice(item.dataOffset, item.dataOffset + item.length);
             
-            // 打印序列项的前32字节用于分析
+            // Print first 32 bytes of sequence item for analysis
             console.log('Item Data Sample:', Array.from(itemData.slice(0, 32)).map(b => b.toString(16).padStart(2, '0')).join(' '));
 
-            // 尝试在序列项中定位波形数据标签(5400,1010)
+            // Try to locate waveform data tag(5400,1010) in sequence item
             let offset = 0;
             while (offset < itemData.length - 8) {
               const group = itemData[offset] + (itemData[offset + 1] << 8);
               const element = itemData[offset + 2] + (itemData[offset + 3] << 8);
               const tag = `(${group.toString(16).padStart(4, '0')},${element.toString(16).padStart(4, '0')})`;
 
-              // 如果是显式VR
+              // If explicit VR
               let valueLength;
               let dataStart;
               let vr = '';
 
               if (transferSyntax === '1.2.840.10008.1.2.1') {
-                // 显式VR
+                // Explicit VR
                 vr = String.fromCharCode(itemData[offset + 4], itemData[offset + 5]);
                 if (['OB', 'OW', 'OF', 'SQ', 'UT', 'UN'].includes(vr)) {
                   valueLength = itemData[offset + 8] + 
@@ -105,7 +105,7 @@ const ECGViewer = () => {
                   dataStart = offset + 8;
                 }
               } else {
-                // 隐式VR
+                // Implicit VR
                 valueLength = itemData[offset + 4] + 
                             (itemData[offset + 5] << 8) +
                             (itemData[offset + 6] << 16) +
@@ -115,7 +115,7 @@ const ECGViewer = () => {
 
               console.log(`Found tag ${tag}${vr ? ` (VR: ${vr})` : ''} at offset ${offset}, length ${valueLength}`);
 
-              // 如果找到波形数据标签
+              // If found waveform data tag
               if (group === 0x5400 && element === 0x1010) {
                 console.log(`Found waveform data at offset ${offset}, length ${valueLength}`);
                 
@@ -153,12 +153,12 @@ const ECGViewer = () => {
         return;
       }
 
-      // 清除现有内容
+      // Clear existing content
       while (container.firstChild) {
         container.removeChild(container.firstChild);
       }
 
-      // 创建canvas
+      // Create canvas
       const canvas = document.createElement('canvas');
       const canvasId = 'ecg-canvas-' + Date.now();
       canvas.id = canvasId;
@@ -166,23 +166,23 @@ const ECGViewer = () => {
       canvas.style.height = '100%';
       container.appendChild(canvas);
 
-      // 创建查看器
+      // Create viewer
       console.log('Creating ECG viewer...');
       const viewer = new DicomECGViewer(arrayBuffer, canvasId, 0);
       viewerRef.current = viewer;
 
-      // 加载视图
+      // Load canvas
       console.log('Loading canvas...');
       await viewer.loadCanvas();
       console.log('Canvas loaded successfully');
       
     } catch (error) {
-      console.error('加载ECG失败:', error);
+      console.error('Failed to load ECG:', error);
       console.error('Error details:', {
         message: error.message,
         stack: error.stack
       });
-      setError(`加载ECG失败: ${error.message}`);
+      setError(`Failed to load ECG: ${error.message}`);
     }
   };
 
@@ -194,7 +194,7 @@ const ECGViewer = () => {
     setError(null);
     setConversionProgress(0);
     setShowProgress(true);
-    setConvertedDicomUrl(null); // 重置URL
+    setConvertedDicomUrl(null); // Reset URL
     
     const formData = new FormData();
     formData.append('file', file);
@@ -206,44 +206,44 @@ const ECGViewer = () => {
       });
 
       if (!uploadResponse.ok) {
-        throw new Error(`上传失败: ${uploadResponse.statusText}`);
+        throw new Error(`Upload failed: ${uploadResponse.statusText}`);
       }
 
       const uploadData = await uploadResponse.json();
       const taskId = uploadData.task_id;
       setCurrentTaskId(taskId);
-      setStatusMessage(`文件已上传，正在处理中...\n任务ID: ${taskId}`);
+      setStatusMessage(`File uploaded, processing...\nTask ID: ${taskId}`);
 
-      // 清除之前的定时器
+      // Clear previous timer
       if (statusCheckIntervalRef.current) {
         clearInterval(statusCheckIntervalRef.current);
         statusCheckIntervalRef.current = null;
       }
 
-      // 设置新的定时器
+      // Set new timer
       statusCheckIntervalRef.current = setInterval(() => {
         fetch(`http://localhost:8000/status/${taskId}`)
           .then(response => {
             if (!response.ok) {
-              throw new Error(`获取状态失败: ${response.statusText}`);
+              throw new Error(`Failed to get status: ${response.statusText}`);
             }
             return response.json();
           })
           .then(data => {
-            console.log('状态检查响应:', data);
+            console.log('Status check response:', data);
             
-            let statusText = `状态: ${data.status}\n`;
+            let statusText = `Status: ${data.status}\n`;
             if (data.message) {
-              statusText += `消息: ${data.message}\n`;
+              statusText += `Message: ${data.message}\n`;
             }
             if (data.error) {
-              statusText += `错误: ${data.error}\n`;
+              statusText += `Error: ${data.error}\n`;
               throw new Error(data.error);
             }
             setStatusMessage(statusText);
 
             if (data.status === 'completed') {
-              // 立即清除定时器
+              // Clear timer immediately
               if (statusCheckIntervalRef.current) {
                 clearInterval(statusCheckIntervalRef.current);
                 statusCheckIntervalRef.current = null;
@@ -251,32 +251,32 @@ const ECGViewer = () => {
               
               if (data.dicom_files && data.dicom_files.length > 0) {
                 const downloadUrl = `http://localhost:8000/download/${taskId}/${data.dicom_files[0]}`;
-                console.log('设置下载URL:', downloadUrl);
+                console.log('Set download URL:', downloadUrl);
                 setConvertedDicomUrl(downloadUrl);
-                statusText += `\n转换完成！\n`;
-                statusText += `文件下载地址: ${downloadUrl}\n`;
+                statusText += `\nConversion completed!\n`;
+                statusText += `File download URL: ${downloadUrl}\n`;
                 setStatusMessage(statusText);
                 setConversionProgress(100);
                 setIsConverting(false);
               } else {
-                console.error('没有找到dicom_files字段或为空:', data);
-                setError('服务器没有返回DICOM文件信息');
+                console.error('No dicom_files field or empty:', data);
+                setError('Server did not return DICOM file information');
               }
             } else if (data.status === 'processing') {
               setConversionProgress(50);
             } else if (data.status === 'failed') {
-              // 处理失败状态
+              // Handle failed status
               if (statusCheckIntervalRef.current) {
                 clearInterval(statusCheckIntervalRef.current);
                 statusCheckIntervalRef.current = null;
               }
-              setError(`转换失败: ${data.error || '未知错误'}`);
+              setError(`Conversion failed: ${data.error || 'Unknown error'}`);
               setIsConverting(false);
             }
           })
           .catch(error => {
-            console.error('状态检查失败:', error);
-            setStatusMessage(`错误: ${error.message}`);
+            console.error('Status check failed:', error);
+            setStatusMessage(`Error: ${error.message}`);
             setShowProgress(false);
             clearInterval(statusCheckIntervalRef.current);
             statusCheckIntervalRef.current = null;
@@ -286,7 +286,7 @@ const ECGViewer = () => {
       }, 1000);
 
     } catch (error) {
-      setStatusMessage(`错误: ${error.message}`);
+      setStatusMessage(`Error: ${error.message}`);
       setShowProgress(false);
       setIsConverting(false);
       setConversionProgress(0);
@@ -299,25 +299,25 @@ const ECGViewer = () => {
     try {
       const response = await fetch(convertedDicomUrl);
       if (!response.ok) {
-        throw new Error(`下载失败: ${response.statusText}`);
+        throw new Error(`Download failed: ${response.statusText}`);
       }
       const buffer = await response.arrayBuffer();
       await loadDicomFile(buffer);
       setError(null);
     } catch (error) {
-      console.error('加载DICOM文件失败:', error);
-      setError(`加载DICOM文件失败: ${error.message}`);
+      console.error('Failed to load DICOM file:', error);
+      setError(`Failed to load DICOM file: ${error.message}`);
     }
   };
 
   return (
     <Card style={{ margin: '24px' }}>
       <Space direction="vertical" style={{ width: '100%' }} size="large">
-        <Title level={4}>ECG 查看器</Title>
+        <Title level={4}>ECG Viewer</Title>
         
         <Row gutter={24}>
           <Col span={12}>
-            <Card title="上传 DICOM 文件" size="small">
+            <Card title="Upload DICOM File" size="small">
               <Upload
                 accept=".dcm"
                 showUploadList={false}
@@ -329,8 +329,8 @@ const ECGViewer = () => {
                       await loadDicomFile(arrayBuffer, { target: { files: [file] } });
                       setError(null);
                     } catch (error) {
-                      console.error('读取文件失败:', error);
-                      setError(`读取文件失败: ${error.message}`);
+                      console.error('Failed to read file:', error);
+                      setError(`Failed to read file: ${error.message}`);
                     }
                   };
                   reader.readAsArrayBuffer(file);
@@ -349,14 +349,14 @@ const ECGViewer = () => {
                   }
                 }}>
                   <InboxOutlined style={{ fontSize: '24px', color: '#40a9ff', marginBottom: '8px', display: 'block' }} />
-                  <div>点击或拖拽上传 DICOM 文件</div>
+                  <div>Click or drag to upload DICOM file</div>
                 </div>
               </Upload>
             </Card>
           </Col>
           
           <Col span={12}>
-            <Card title="上传 CT 扫描图像" size="small">
+            <Card title="Upload CT Scan Image" size="small">
               <Upload
                 accept="image/*"
                 showUploadList={false}
@@ -366,8 +366,8 @@ const ECGViewer = () => {
                     try {
                       await handleCtUpload({ target: { files: [file] } });
                     } catch (error) {
-                      console.error('读取文件失败:', error);
-                      setError(`读取文件失败: ${error.message}`);
+                      console.error('Failed to read file:', error);
+                      setError(`Failed to read file: ${error.message}`);
                     }
                   };
                   reader.readAsArrayBuffer(file);
@@ -386,7 +386,7 @@ const ECGViewer = () => {
                   }
                 }}>
                   <FileImageOutlined style={{ fontSize: '24px', color: '#40a9ff', marginBottom: '8px', display: 'block' }} />
-                  <div>点击或拖拽上传 CT 扫描图像</div>
+                  <div>Click or drag to upload CT scan image</div>
                 </div>
               </Upload>
             </Card>
@@ -412,7 +412,7 @@ const ECGViewer = () => {
                 onClick={handleViewConverted}
                 style={{ marginTop: '16px' }}
               >
-                在查看器中打开
+                Open in viewer
               </Button>
             )}
           </div>
