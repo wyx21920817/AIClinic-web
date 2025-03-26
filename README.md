@@ -24,7 +24,7 @@ AIClinic is a modern web-based medical imaging platform that combines AI technol
 
 ## Technology Stack
 
-- React.js for front-end development
+- React.js for frontend development
 - Ant Design component library for UI
 - DICOM processing libraries
   - dicom-parser
