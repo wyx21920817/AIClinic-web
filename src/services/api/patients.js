@@ -1,0 +1,90 @@
+import request from './request';
+import { API_ENDPOINTS } from './config';
+
+export const patientsApi = {
+  // Get all patients
+  getPatients: () => 
+    request.get(API_ENDPOINTS.PATIENTS),
+
+  // Get patient by ID
+  getPatient: (id) => 
+    request.get(API_ENDPOINTS.PATIENT_DETAIL(id)),
+
+  // Create new patient
+  createPatient: (data) => {
+    const formData = new URLSearchParams();
+    formData.append('patient_id', data.patient_id);
+    formData.append('name', data.name);
+    formData.append('gender', data.gender);
+    formData.append('birth_date', data.birth_date.toISOString());
+    if (data.contact_info) {
+      formData.append('contact_info', JSON.stringify(data.contact_info));
+    }
+
+    return request.post(API_ENDPOINTS.PATIENTS, formData, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    });
+  },
+
+  // Update patient
+  updatePatient: (id, data) => {
+    const formData = new URLSearchParams();
+    if (data.name) formData.append('name', data.name);
+    if (data.gender) formData.append('gender', data.gender);
+    if (data.birth_date) formData.append('birth_date', data.birth_date.toISOString());
+    if (data.contact_info) formData.append('contact_info', JSON.stringify(data.contact_info));
+
+    return request.put(API_ENDPOINTS.PATIENT_DETAIL(id), formData, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    });
+  },
+
+  // Delete patient
+  deletePatient: (id) => 
+    request.delete(API_ENDPOINTS.PATIENT_DETAIL(id)),
+
+  // Get patient's ECG files
+  getPatientEcgFiles: (userId) => 
+    request.get(API_ENDPOINTS.ECG_FILES(userId)),
+
+  // Get patient's ECG file
+  getPatientEcgFile: (userId, fileId, options = {}) => 
+    request.get(API_ENDPOINTS.ECG_FILE_DETAIL(userId, fileId), { params: options }),
+
+  // Upload ECG file
+  uploadEcgFile: (userId, file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    return request.post(API_ENDPOINTS.ECG_FILES(userId), formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+  },
+
+  // Update ECG file
+  updateEcgFile: (userId, fileId, data) => {
+    const formData = new URLSearchParams();
+    formData.append('notes', data.notes);
+    formData.append('tags', data.tags);
+
+    return request.put(API_ENDPOINTS.ECG_FILE_DETAIL(userId, fileId), formData, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    });
+  },
+
+  // Delete ECG file
+  deleteEcgFile: (userId, fileId) => 
+    request.delete(API_ENDPOINTS.ECG_FILE_DETAIL(userId, fileId)),
+
+  // Get patient's diagnosis
+  getPatientDiagnosis: (userId) => 
+    request.get(API_ENDPOINTS.ECG_DIAGNOSIS(userId)),
+};
