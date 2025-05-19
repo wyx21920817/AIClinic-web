@@ -67,8 +67,27 @@ const Login = () => {
 
       const response = await authApi.verifyMfa(formData);
       localStorage.setItem('token', response.access_token);
+      // Store user data
+      localStorage.setItem('userData', JSON.stringify({
+        username: response.username,
+        role: response.role,
+        user_id: response.user_id
+      }));
       message.success('Login successful');
-      navigate('/dashboard');
+      // Redirect based on role
+      try {
+        const { getUserRole } = await import('../../utils/jwt');
+        const role = getUserRole();
+        if (role === 'doctor') {
+          navigate('/doctor-home');
+        } else if (role === 'admin') {
+          navigate('/admin-home');
+        } else {
+          navigate('/dashboard');
+        }
+      } catch (e) {
+        navigate('/dashboard');
+      }
     } catch (error) {
       message.error(error.response?.data?.detail || 'Verification failed');
     } finally {

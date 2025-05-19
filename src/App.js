@@ -8,6 +8,7 @@ import PatientList from './pages/patients/PatientList';
 import PatientDetail from './pages/patients/PatientDetail';
 import DoctorList from './pages/doctors/DoctorList';
 import AddDoctor from './pages/doctors/AddDoctor';
+import PrivateRoute from './components/PrivateRoute';
 import './App.css';
 
 function App() {
@@ -24,6 +25,12 @@ function App() {
           <Route path="doctors" element={<DoctorList />} />
           <Route path="doctors/add" element={<AddDoctor />} />
           <Route path="doctors/edit/:id" element={<AddDoctor />} />
+          <Route path="doctor-home" element={<PrivateRoute allowedRoles={['doctor']} />}> 
+            <Route index element={<div>Doctor Home</div>} />
+          </Route>
+          <Route path="admin-home" element={<PrivateRoute allowedRoles={['admin']} />}> 
+            <Route index element={<div>Admin Home</div>} />
+          </Route>
         </Route>
       </Routes>
     </Router>

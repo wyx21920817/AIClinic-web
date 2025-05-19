@@ -9,6 +9,8 @@ import {
   LogoutOutlined
 } from '@ant-design/icons';
 import styled from '@emotion/styled';
+import UserInfo from '../components/UserInfo';
+import Sidebar from '../components/Sidebar';
 
 const { Header, Sider, Content } = Layout;
 
@@ -89,42 +91,7 @@ const MainLayout = () => {
         <Logo>
           <span>ECG Diagnostic</span>
         </Logo>
-        <Menu
-          theme="dark"
-          mode="inline"
-          selectedKeys={[location.pathname]}
-          style={{
-            background: '#0052cc',
-            border: 'none',
-          }}
-          items={[
-            {
-              key: '/dashboard',
-              icon: <DashboardOutlined />,
-              label: 'Dashboard',
-              onClick: () => handleMenuClick('/dashboard'),
-            },
-            {
-              key: '/patients',
-              icon: <TeamOutlined />,
-              label: 'Patients',
-              onClick: () => handleMenuClick('/patients'),
-            },
-            {
-              key: '/doctors',
-              icon: <TeamOutlined />,
-              label: 'Doctors',
-              onClick: () => handleMenuClick('/doctors'),
-            },
-            {
-              key: '/account',
-              icon: <UserOutlined />,
-              label: 'Account',
-              onClick: () => handleMenuClick('/account'),
-              style: { marginTop: 'auto' },
-            },
-          ]}
-        />
+        <Sidebar />
       </Sider>
       <Layout style={{ marginLeft: 200 }}>
         <StyledHeader>
@@ -138,7 +105,7 @@ const MainLayout = () => {
           >
             <Space style={{ cursor: 'pointer' }}>
               <Avatar icon={<UserOutlined />} />
-              {!collapsed && <span>Dr. Smith</span>}
+              {!collapsed && <UserInfo />}
             </Space>
           </Dropdown>
         </StyledHeader>
