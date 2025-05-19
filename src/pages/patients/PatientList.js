@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, Input, Space, Card, message, Modal, Form, DatePicker, Select, Typography } from 'antd';
-import { SearchOutlined, PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
+import { Input, Card, List, Button, Avatar, Typography, Space, Modal, message, Form, DatePicker, Select } from 'antd';
+import { SearchOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import styled from '@emotion/styled';
+import { useNavigate } from 'react-router-dom';
 import { patientsApi } from '../../services/api/patients';
 import dayjs from 'dayjs';
 
@@ -15,15 +15,45 @@ const PageContainer = styled.div`
 `;
 
 const StyledCard = styled(Card)`
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 `;
 
 const SearchHeader = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-bottom: 24px;
+`;
+
+const PatientItem = styled.div`
+  display: flex;
+  align-items: center;
+  padding: 16px;
+  background: #fff;
+  border-radius: 8px;
   margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+
+  .patient-info {
+    flex: 1;
+    margin-left: 16px;
+  }
+
+  .patient-name {
+    font-size: 16px;
+    font-weight: 500;
+    margin-bottom: 4px;
+  }
+
+  .patient-details {
+    color: rgba(0, 0, 0, 0.45);
+    font-size: 14px;
+  }
+`;
+
+const ActionButtons = styled(Space)`
+  margin-left: 16px;
 `;
 
 const PatientList = () => {
@@ -39,6 +69,7 @@ const PatientList = () => {
     try {
       setLoading(true);
       const response = await patientsApi.getPatients();
+      console.log('后端返回的患者数据:', response);
       setPatients(response);
     } catch (error) {
       message.error('Failed to fetch patients');
@@ -51,11 +82,32 @@ const PatientList = () => {
     fetchPatients();
   }, []);
 
-  const handleAdd = () => {
-    setEditingPatient(null);
-    form.resetFields();
-    setModalVisible(true);
-  };
+  // MOCK 数据演示（如需后端数据可删除此段）
+  // useEffect(() => {
+  //   setPatients([
+  //     {
+  //       id: '665b1e2f8e4b2c001e7e7a1a',
+  //       patient_id: '1',
+  //       name: 'Jason',
+  //       gender: 'M',
+  //       birth_date: '1990-01-24',
+  //     },
+  //     {
+  //       id: '665b1e2f8e4b2c001e7e7a1b',
+  //       patient_id: '122',
+  //       name: 'Kate',
+  //       gender: 'F',
+  //       birth_date: '1983-05-10',
+  //     },
+  //     {
+  //       id: '665b1e2f8e4b2c001e7e7a1c',
+  //       patient_id: '122222',
+  //       name: 'Mandy',
+  //       gender: 'F',
+  //       birth_date: '1974-09-28',
+  //     },
+  //   ]);
+  // }, []);
 
   const handleEdit = (patient) => {
     setEditingPatient(patient);
@@ -78,106 +130,77 @@ const PatientList = () => {
 
   const handleSave = async (values) => {
     try {
-      if (editingPatient) {
-        await patientsApi.updatePatient(editingPatient.id, values);
-        message.success('Patient updated successfully');
-      } else {
-        await patientsApi.createPatient(values);
-        message.success('Patient added successfully');
-      }
+      await patientsApi.updatePatient(editingPatient.patient_id, values);
+      message.success('Patient updated successfully');
       setModalVisible(false);
       fetchPatients();
     } catch (error) {
-      message.error(editingPatient ? 'Failed to update patient' : 'Failed to add patient');
+      message.error('Failed to update patient');
     }
   };
 
-  const columns = [
-    {
-      title: 'Patient ID',
-      dataIndex: 'patient_id',
-      key: 'patient_id',
-    },
-    {
-      title: 'Name',
-      dataIndex: 'name',
-      key: 'name',
-      filteredValue: [searchText],
-      onFilter: (value, record) => 
-        record.name.toLowerCase().includes(value.toLowerCase()) ||
-        record.patient_id.toLowerCase().includes(value.toLowerCase()),
-    },
-    {
-      title: 'Gender',
-      dataIndex: 'gender',
-      key: 'gender',
-    },
-    {
-      title: 'Birth Date',
-      dataIndex: 'birth_date',
-      key: 'birth_date',
-      render: (date) => dayjs(date).format('YYYY-MM-DD'),
-    },
-    {
-      title: 'Actions',
-      key: 'actions',
-      render: (_, record) => (
-        <Space>
-          <Button 
-            type="text" 
-            icon={<EditOutlined />} 
-            onClick={() => handleEdit(record)}
-          />
-          <Button 
-            type="text" 
-            danger 
-            icon={<DeleteOutlined />} 
-            onClick={() => Modal.confirm({
-              title: 'Delete Patient',
-              content: 'Are you sure you want to delete this patient?',
-              onOk: () => handleDelete(record.id),
-            })}
-          />
-          <Button 
-            type="primary" 
-            onClick={() => navigate(`/patients/${record.id}`)}
-          >
-            View Details
-          </Button>
-        </Space>
-      ),
-    },
-  ];
+  // Filter patients by name or ID
+  const filteredPatients = patients.filter(
+    (p) =>
+      p.name.toLowerCase().includes(searchText.toLowerCase()) ||
+      p.patient_id.toLowerCase().includes(searchText.toLowerCase())
+  );
 
   return (
     <PageContainer>
       <StyledCard>
         <SearchHeader>
-          <Input
-            prefix={<SearchOutlined />}
-            placeholder="Search by name or ID"
-            style={{ width: 300 }}
-            onChange={(e) => setSearchText(e.target.value)}
-            value={searchText}
-          />
-          <Button 
-            type="primary" 
-            icon={<PlusOutlined />}
-            onClick={handleAdd}
-          >
-            Add Patient
-          </Button>
+          <Title level={3}>Patients Management</Title>
         </SearchHeader>
-
-        <Table 
-          columns={columns} 
-          dataSource={patients} 
-          loading={loading}
-          rowKey="id"
+        <Input
+          prefix={<SearchOutlined />}
+          placeholder="Patient Name/ID"
+          style={{ marginBottom: 24 }}
+          onChange={(e) => setSearchText(e.target.value)}
+          value={searchText}
         />
-
+        <List
+          loading={loading}
+          dataSource={filteredPatients}
+          renderItem={(patient) => (
+            <PatientItem>
+              <Avatar size={64}>
+                {patient.name ? patient.name[0] : 'P'}
+              </Avatar>
+              <div className="patient-info">
+                <div className="patient-name">{patient.name}</div>
+                <div className="patient-details">
+                  Patient ID: {patient.patient_id} &nbsp;&nbsp; Gender: {patient.gender} &nbsp;&nbsp; Birth: {dayjs(patient.birth_date).format('YYYY-MM-DD')}
+                </div>
+              </div>
+              <ActionButtons>
+                <Button
+                  type="text"
+                  icon={<EditOutlined />}
+                  onClick={() => handleEdit(patient)}
+                />
+                <Button
+                  type="text"
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={() => Modal.confirm({
+                    title: 'Delete Patient',
+                    content: 'Are you sure you want to delete this patient?',
+                    onOk: () => handleDelete(patient.patient_id),
+                  })}
+                />
+                <Button
+                  type="primary"
+                  onClick={() => navigate(`/patients/${patient.patient_id}`)}
+                >
+                  View Details
+                </Button>
+              </ActionButtons>
+            </PatientItem>
+          )}
+        />
         <Modal
-          title={editingPatient ? 'Edit Patient' : 'Add Patient'}
+          title="Edit Patient"
           open={modalVisible}
           onCancel={() => setModalVisible(false)}
           footer={null}
@@ -187,16 +210,6 @@ const PatientList = () => {
             layout="vertical"
             onFinish={handleSave}
           >
-            {!editingPatient && (
-              <Form.Item
-                name="patient_id"
-                label="Patient ID"
-                rules={[{ required: true, message: 'Please input patient ID' }]}
-              >
-                <Input placeholder="Enter patient ID" />
-              </Form.Item>
-            )}
-
             <Form.Item
               name="name"
               label="Name"
@@ -204,7 +217,6 @@ const PatientList = () => {
             >
               <Input placeholder="Enter name" />
             </Form.Item>
-
             <Form.Item
               name="gender"
               label="Gender"
@@ -216,7 +228,6 @@ const PatientList = () => {
                 <Select.Option value="Others">Others</Select.Option>
               </Select>
             </Form.Item>
-
             <Form.Item
               name="birth_date"
               label="Birth Date"
@@ -224,19 +235,11 @@ const PatientList = () => {
             >
               <DatePicker style={{ width: '100%' }} />
             </Form.Item>
-
-            <Form.Item
-              name="contact_info"
-              label="Contact Info"
-            >
-              <Input.TextArea placeholder="Enter contact information" />
-            </Form.Item>
-
             <Form.Item>
               <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
                 <Button onClick={() => setModalVisible(false)}>Cancel</Button>
                 <Button type="primary" htmlType="submit">
-                  {editingPatient ? 'Update' : 'Add'}
+                  Update
                 </Button>
               </Space>
             </Form.Item>

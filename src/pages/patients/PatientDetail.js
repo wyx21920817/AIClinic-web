@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Descriptions, Button, Space, Upload, List, Tag, message, Modal, Form, Input, Select } from 'antd';
+import { Card, Descriptions, Button, Space, Upload, List, Tag, message, Modal, Form, Input, Select, DatePicker } from 'antd';
 import { useParams, useNavigate } from 'react-router-dom';
 import { UploadOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import styled from '@emotion/styled';
@@ -30,7 +30,7 @@ const PatientDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [form] = Form.useForm();
-  
+
   const [patient, setPatient] = useState(null);
   const [ecgFiles, setEcgFiles] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -118,18 +118,17 @@ const PatientDetail = () => {
 
   return (
     <PageContainer>
-      <Card 
+      <Card
         title="Patient Information"
         extra={
-          <Button 
-            type="primary" 
+          <Button
+            type="primary"
             icon={<EditOutlined />}
             onClick={() => {
               form.setFieldsValue({
                 name: patient.name,
                 gender: patient.gender,
-                birth_date: dayjs(patient.birth_date),
-                contact_info: patient.contact_info
+                birth_date: dayjs(patient.birth_date)
               });
               setEditModalVisible(true);
             }}
@@ -145,11 +144,6 @@ const PatientDetail = () => {
           <Descriptions.Item label="Birth Date">
             {dayjs(patient.birth_date).format('YYYY-MM-DD')}
           </Descriptions.Item>
-          {patient.contact_info && (
-            <Descriptions.Item label="Contact Info" span={2}>
-              {patient.contact_info}
-            </Descriptions.Item>
-          )}
         </Descriptions>
       </Card>
 
@@ -168,9 +162,9 @@ const PatientDetail = () => {
           renderItem={file => (
             <List.Item
               actions={[
-                <Button 
+                <Button
                   key="edit"
-                  type="text" 
+                  type="text"
                   icon={<EditOutlined />}
                   onClick={() => {
                     setSelectedFile(file);
@@ -181,10 +175,10 @@ const PatientDetail = () => {
                     setFileModalVisible(true);
                   }}
                 />,
-                <Button 
+                <Button
                   key="delete"
-                  type="text" 
-                  danger 
+                  type="text"
+                  danger
                   icon={<DeleteOutlined />}
                   onClick={() => {
                     Modal.confirm({
@@ -204,7 +198,7 @@ const PatientDetail = () => {
                     {file.notes && <div>Notes: {file.notes}</div>}
                     {file.tags && (
                       <div>
-                        Tags: 
+                        Tags:
                         {file.tags.split(',').map(tag => (
                           <Tag key={tag} style={{ marginLeft: 8 }}>{tag.trim()}</Tag>
                         ))}
@@ -250,10 +244,11 @@ const PatientDetail = () => {
           </Form.Item>
 
           <Form.Item
-            name="contact_info"
-            label="Contact Info"
+            name="birth_date"
+            label="Birth Date"
+            rules={[{ required: true, message: 'Please select birth date' }]}
           >
-            <Input.TextArea />
+            <DatePicker style={{ width: '100%' }} />
           </Form.Item>
 
           <Form.Item>
