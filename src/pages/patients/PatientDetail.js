@@ -4,6 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { UploadOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import styled from '@emotion/styled';
 import { patientsApi } from '../../services/api/patients';
+import request from '../../services/api/request';
 import dayjs from 'dayjs';
 
 const PageContainer = styled.div`
@@ -27,7 +28,7 @@ const PageContainer = styled.div`
 `;
 
 const PatientDetail = () => {
-  const { id } = useParams();
+  const { patientId } = useParams();
   const navigate = useNavigate();
   const [form] = Form.useForm();
 
@@ -41,7 +42,7 @@ const PatientDetail = () => {
   const fetchPatient = async () => {
     try {
       setLoading(true);
-      const data = await patientsApi.getPatient(id);
+      const data = await patientsApi.getPatient(patientId);
       setPatient(data);
     } catch (error) {
       message.error('Failed to fetch patient details');
@@ -53,10 +54,18 @@ const PatientDetail = () => {
 
   const fetchEcgFiles = async () => {
     try {
+      console.log('Fetching ECG files...');
       setLoading(true);
-      const data = await patientsApi.getPatientEcgFiles(id);
+      if (!patient || !patient.id) {
+        console.log('No patient or patient ID');
+        return;
+      }
+      console.log('Fetching ECG files for patient:', patient.id);
+      const data = await patientsApi.getPatientEcgFiles(patient.id);
+      console.log('Received ECG files:', data);
       setEcgFiles(data);
     } catch (error) {
+      console.error('Failed to fetch ECG files:', error);
       message.error('Failed to fetch ECG files');
     } finally {
       setLoading(false);
@@ -65,12 +74,17 @@ const PatientDetail = () => {
 
   useEffect(() => {
     fetchPatient();
-    fetchEcgFiles();
-  }, [id]);
+  }, [patientId]);
+
+  useEffect(() => {
+    if (patient) {
+      fetchEcgFiles();
+    }
+  }, [patient]);
 
   const handleEditPatient = async (values) => {
     try {
-      await patientsApi.updatePatient(id, values);
+      await patientsApi.updatePatient(patientId, values);
       message.success('Patient information updated successfully');
       setEditModalVisible(false);
       fetchPatient();
@@ -81,7 +95,11 @@ const PatientDetail = () => {
 
   const handleEditFile = async (values) => {
     try {
-      await patientsApi.updateEcgFile(id, selectedFile.id, values);
+      if (!patient || !patient.id) {
+        message.error('Patient ID not found');
+        return;
+      }
+      await patientsApi.updateEcgFile(patient.id, selectedFile.id, values);
       message.success('ECG file updated successfully');
       setFileModalVisible(false);
       fetchEcgFiles();
@@ -92,7 +110,11 @@ const PatientDetail = () => {
 
   const handleDeleteFile = async (fileId) => {
     try {
-      await patientsApi.deleteEcgFile(id, fileId);
+      if (!patient || !patient.id) {
+        message.error('Patient ID not found');
+        return;
+      }
+      await patientsApi.deleteEcgFile(patient.id, fileId);
       message.success('ECG file deleted successfully');
       fetchEcgFiles();
     } catch (error) {
@@ -102,7 +124,11 @@ const PatientDetail = () => {
 
   const handleUpload = async (file) => {
     try {
-      await patientsApi.uploadEcgFile(id, file);
+      if (!patient || !patient.id) {
+        message.error('Patient ID not found');
+        return false;
+      }
+      await patientsApi.uploadEcgFile(patient.id, file);
       message.success('ECG file uploaded successfully');
       fetchEcgFiles();
       return false; // Prevent default upload behavior
@@ -193,17 +219,40 @@ const PatientDetail = () => {
               <List.Item.Meta
                 title={file.filename}
                 description={
-                  <Space direction="vertical">
-                    <div>Uploaded at: {dayjs(file.upload_time).format('YYYY-MM-DD HH:mm:ss')}</div>
+                  <Space direction="vertical" style={{ width: '100%' }}>
+                    <div>Uploaded at: {dayjs(file.created_at).format('YYYY-MM-DD HH:mm:ss')}</div>
                     {file.notes && <div>Notes: {file.notes}</div>}
                     {file.tags && (
                       <div>
                         Tags:
-                        {file.tags.split(',').map(tag => (
-                          <Tag key={tag} style={{ marginLeft: 8 }}>{tag.trim()}</Tag>
+                        {(Array.isArray(file.tags) ? file.tags : String(file.tags).split(',')).map(tag => (
+                          <Tag key={tag} style={{ marginLeft: 8 }}>{typeof tag === 'string' ? tag.trim() : tag}</Tag>
                         ))}
                       </div>
                     )}
+                    <div>Instance IDs:</div>
+                    <List
+                      size="small"
+                      bordered
+                      dataSource={file.instanceIDs || []}
+                      renderItem={(instanceId) => (
+                        <List.Item>
+                          <Button 
+                            type="link" 
+                            onClick={() => {
+                              console.log('Clicked instance ID:', instanceId);
+                              console.log('File user_id:', file.user_id);
+                              console.log('Navigating to:', `/ecg-view/${file.user_id}/${instanceId}`);
+                              navigate(`/ecg-view/${file.user_id}/${instanceId}`);
+                            }}
+                            style={{ padding: 0 }}
+                          >
+                            {instanceId}
+                          </Button>
+                        </List.Item>
+                      )}
+                      style={{ maxHeight: '200px', overflow: 'auto' }}
+                    />
                   </Space>
                 }
               />

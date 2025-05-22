@@ -1,17 +1,72 @@
 import React from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   DicomECGViewer,
   SOP_CLASS_UIDS,
 } from 'ecg-dicom-web-viewer';
 import dicomParser from 'dicom-parser';
 import ReadECG from '../utils/ReadECG';
-import { Card, Space, Typography, Upload, Progress, Row, Col, Button } from 'antd';
-import { InboxOutlined, FileImageOutlined } from '@ant-design/icons';
+import { Card, Space, Typography, Upload, Progress, Row, Col, Button, message } from 'antd';
+import { InboxOutlined, FileImageOutlined, ArrowLeftOutlined } from '@ant-design/icons';
+import request from '../services/api/request';
+import { API_ENDPOINTS, API_BASE_URL } from '../services/api/config';
 
 const { Title } = Typography;
 const { Dragger } = Upload;
 
+// DICOM 标签描述映射
+const DICOM_TAG_DESCRIPTIONS = {
+  'x00080012': 'Instance Creation Date',
+  'x00080013': 'Instance Creation Time',
+  'x00080016': 'SOP Class UID',
+  'x00080018': 'SOP Instance UID',
+  'x00080020': 'Study Date',
+  'x00080030': 'Study Time',
+  'x00080050': 'Accession Number',
+  'x00080060': 'Modality',
+  'x00080070': 'Manufacturer',
+  'x00080080': 'Institution Name',
+  'x00080090': 'Referring Physician Name',
+  'x00100010': 'Patient Name',
+  'x00100020': 'Patient ID',
+  'x00100030': 'Patient Birth Date',
+  'x00100040': 'Patient Sex',
+  'x00101010': 'Patient Age',
+  'x00101020': 'Patient Size',
+  'x00101030': 'Patient Weight',
+  'x00180015': 'Body Part Examined',
+  'x00181000': 'Device Serial Number',
+  'x00181020': 'Software Version(s)',
+  'x0020000d': 'Study Instance UID',
+  'x0020000e': 'Series Instance UID',
+  'x00200010': 'Study ID',
+  'x00200011': 'Series Number',
+  'x00200013': 'Instance Number',
+  'x00280002': 'Samples per Pixel',
+  'x00280004': 'Photometric Interpretation',
+  'x00280010': 'Rows',
+  'x00280011': 'Columns',
+  'x00280100': 'Bits Allocated',
+  'x00280101': 'Bits Stored',
+  'x00280102': 'High Bit',
+  'x00280103': 'Pixel Representation',
+};
+
+// SOP Class UID 映射
+const SOP_CLASS_DESCRIPTIONS = {
+  '1.2.840.10008.5.1.4.1.1.9.1.1': '12-Lead ECG Waveform Storage',
+  '1.2.840.10008.5.1.4.1.1.9.1.2': 'General ECG Waveform Storage',
+  '1.2.840.10008.5.1.4.1.1.9.1.3': 'Ambulatory ECG Waveform Storage',
+  '1.2.840.10008.5.1.4.1.1.9.2.1': 'Hemodynamic Waveform Storage',
+  '1.2.840.10008.5.1.4.1.1.9.3.1': 'Cardiac Electrophysiology Waveform Storage',
+  '1.2.840.10008.5.1.4.1.1.9.4.1': 'Basic Voice Audio Waveform Storage',
+};
+
 const ECGViewer = () => {
+  const { userId, instanceId } = useParams();
+  console.log('ECGViewer mounted');
+  console.log('URL params:', { userId, instanceId });
+  const navigate = useNavigate();
   const [error, setError] = React.useState(null);
   const [isConverting, setIsConverting] = React.useState(false);
   const [conversionProgress, setConversionProgress] = React.useState(0);
@@ -19,11 +74,65 @@ const ECGViewer = () => {
   const [statusMessage, setStatusMessage] = React.useState('');
   const [showProgress, setShowProgress] = React.useState(false);
   const [convertedDicomUrl, setConvertedDicomUrl] = React.useState(null);
+  const [dicomTags, setDicomTags] = React.useState(null);
   const statusCheckIntervalRef = React.useRef(null);
   const viewerRef = React.useRef(null);
   const containerId = 'ecg-container';
 
   React.useEffect(() => {
+    const loadInstanceFromOrthanc = async () => {
+      try {
+        setError(null);
+        console.log('Starting to load ECG file...');
+        
+        console.log('Fetching ECG file for user:', userId, 'instance:', instanceId);
+        const response = await request.get(
+          API_ENDPOINTS.ECG_FILE_DETAIL(userId, instanceId),
+          { responseType: 'arraybuffer' }
+        );
+
+        console.log('Array buffer received, loading DICOM file...');
+        const byteArray = new Uint8Array(response);
+        const dataSet = dicomParser.parseDicom(byteArray);
+        
+        // 收集所有 DICOM 标签
+        const tags = {};
+        for (let tag in dataSet.elements) {
+          const element = dataSet.elements[tag];
+          if (element.items) {
+            // 如果是序列，我们只记录它是一个序列
+            tags[tag] = 'Sequence with ' + element.items.length + ' items';
+          } else {
+            try {
+              const value = dataSet.string(tag);
+              if (value) {
+                tags[tag] = value;
+              }
+            } catch (e) {
+              console.log('Could not read tag:', tag, e);
+            }
+          }
+        }
+        setDicomTags(tags);
+        
+        await loadDicomFile(response);
+        console.log('DICOM file loaded successfully');
+      } catch (error) {
+        console.error('Detailed error:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name,
+          response: error.response
+        });
+        message.error(error.message || 'Failed to load ECG file');
+        setError(error.message || 'Failed to load ECG file');
+      }
+    };
+
+    if (instanceId) {
+      loadInstanceFromOrthanc();
+    }
+
     return () => {
       if (statusCheckIntervalRef.current) {
         clearInterval(statusCheckIntervalRef.current);
@@ -36,7 +145,7 @@ const ECGViewer = () => {
         viewerRef.current = null;
       }
     };
-  }, []);
+  }, [instanceId]);
 
   const loadDicomFile = async (arrayBuffer, event) => {
     try {
@@ -311,87 +420,20 @@ const ECGViewer = () => {
   };
 
   return (
-    <Card style={{ margin: '24px' }}>
+    <Card
+      title={
+        <Space>
+          <Button 
+            icon={<ArrowLeftOutlined />} 
+            type="link" 
+            onClick={() => navigate(-1)}
+          />
+          <span>ECG Viewer</span>
+        </Space>
+      }
+    >
       <Space direction="vertical" style={{ width: '100%' }} size="large">
-        <Title level={4}>ECG Viewer</Title>
-        
-        <Row gutter={24}>
-          <Col span={12}>
-            <Card title="Upload DICOM File" size="small">
-              <Upload
-                accept=".dcm"
-                showUploadList={false}
-                beforeUpload={(file) => {
-                  const reader = new FileReader();
-                  reader.onload = async (e) => {
-                    try {
-                      const arrayBuffer = e.target.result;
-                      await loadDicomFile(arrayBuffer, { target: { files: [file] } });
-                      setError(null);
-                    } catch (error) {
-                      console.error('Failed to read file:', error);
-                      setError(`Failed to read file: ${error.message}`);
-                    }
-                  };
-                  reader.readAsArrayBuffer(file);
-                  return false;
-                }}
-              >
-                <div style={{ 
-                  padding: '20px',
-                  border: '1px dashed #d9d9d9',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  textAlign: 'center',
-                  transition: 'border-color 0.3s',
-                  ':hover': {
-                    borderColor: '#1890ff'
-                  }
-                }}>
-                  <InboxOutlined style={{ fontSize: '24px', color: '#40a9ff', marginBottom: '8px', display: 'block' }} />
-                  <div>Click or drag to upload DICOM file</div>
-                </div>
-              </Upload>
-            </Card>
-          </Col>
-          
-          <Col span={12}>
-            <Card title="Upload CT Scan Image" size="small">
-              <Upload
-                accept="image/*"
-                showUploadList={false}
-                beforeUpload={(file) => {
-                  const reader = new FileReader();
-                  reader.onload = async (e) => {
-                    try {
-                      await handleCtUpload({ target: { files: [file] } });
-                    } catch (error) {
-                      console.error('Failed to read file:', error);
-                      setError(`Failed to read file: ${error.message}`);
-                    }
-                  };
-                  reader.readAsArrayBuffer(file);
-                  return false;
-                }}
-              >
-                <div style={{ 
-                  padding: '20px',
-                  border: '1px dashed #d9d9d9',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  textAlign: 'center',
-                  transition: 'border-color 0.3s',
-                  ':hover': {
-                    borderColor: '#1890ff'
-                  }
-                }}>
-                  <FileImageOutlined style={{ fontSize: '24px', color: '#40a9ff', marginBottom: '8px', display: 'block' }} />
-                  <div>Click or drag to upload CT scan image</div>
-                </div>
-              </Upload>
-            </Card>
-          </Col>
-        </Row>
+
 
         {error && (
           <div style={{ color: '#ff4d4f' }}>
@@ -429,6 +471,43 @@ const ECGViewer = () => {
             backgroundColor: '#fafafa'
           }}
         />
+
+        {dicomTags && (
+          <Card title="DICOM Tags" style={{ marginTop: '20px' }}>
+            <div style={{ maxHeight: '400px', overflow: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr>
+                    <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Tag</th>
+                    <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Description</th>
+                    <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(dicomTags).map(([tag, value]) => (
+                    <tr key={tag}>
+                      <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>{tag}</td>
+                      <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                        {DICOM_TAG_DESCRIPTIONS[tag] || 'Unknown'}
+                      </td>
+                      <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', wordBreak: 'break-all' }}>
+                        {tag === 'x00080016' ? (
+                          <>
+                            {value}
+                            <br />
+                            <small style={{ color: '#666' }}>
+                              {SOP_CLASS_DESCRIPTIONS[value] || 'Unknown SOP Class'}
+                            </small>
+                          </>
+                        ) : value}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )}
       </Space>
     </Card>
   );

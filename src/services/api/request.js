@@ -12,10 +12,37 @@ const api = axios.create({
 // Request interceptor
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    // 不需要 token 的路径列表
+    const noAuthPaths = [
+      '/api/login',
+      '/api/login/mfa',
+      '/api/register'
+    ];
+
+    // 检查当前请求路径是否需要 token
+    const needsAuth = !noAuthPaths.some(path => config.url.includes(path));
+
+    if (needsAuth) {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        // 如果需要 token 但没有 token，重定向到登录页
+        window.location.href = '/login';
+        throw new Error('No token available');
+      }
+      // 确保 headers 对象存在
+      config.headers = config.headers || {};
+      // 设置 Authorization 头
+      config.headers['Authorization'] = `Bearer ${token}`;
     }
+
+    // 如果是 arraybuffer 请求，确保设置正确的 headers
+    if (config.responseType === 'arraybuffer') {
+      config.headers = config.headers || {};
+      config.headers['Accept'] = '*/*';
+    }
+
+    console.log('Request interceptor - Config:', config);
+    console.log('Request interceptor - Final headers:', config.headers);
     return config;
   },
   (error) => {
