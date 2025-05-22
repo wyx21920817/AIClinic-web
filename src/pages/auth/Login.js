@@ -150,7 +150,7 @@ const Login = () => {
                     Login
                   </Button>
                 </Form.Item>
-                <Form.Item>
+                {/* <Form.Item>
                   <Button
                     type="link"
                     onClick={handleRegister}
@@ -158,7 +158,7 @@ const Login = () => {
                   >
                     Register new account
                   </Button>
-                </Form.Item>
+                </Form.Item> */}
               </Form>
             ) : (
               <Form
