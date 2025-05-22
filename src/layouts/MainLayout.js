@@ -73,6 +73,7 @@ const MainLayout = () => {
 
   const handleUserMenuClick = ({ key }) => {
     if (key === 'logout') {
+      localStorage.removeItem('token');
       navigate('/login');
     }
   };
