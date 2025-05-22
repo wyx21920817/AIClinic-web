@@ -16,17 +16,27 @@ const { Dragger } = Upload;
 
 // DICOM 标签描述映射
 const DICOM_TAG_DESCRIPTIONS = {
+  'x00020000': 'File Meta Information Group Length',
+  'x00020002': 'Media Storage SOP Class UID',
+  'x00020003': 'Media Storage SOP Instance UID',
+  'x00020010': 'Transfer Syntax UID',
   'x00080012': 'Instance Creation Date',
   'x00080013': 'Instance Creation Time',
   'x00080016': 'SOP Class UID',
   'x00080018': 'SOP Instance UID',
   'x00080020': 'Study Date',
+  'x00080023': 'Content Date',
+  'x0008002a': 'Acquisition DateTime',
   'x00080030': 'Study Time',
+  'x00080033': 'Content Time',
   'x00080050': 'Accession Number',
   'x00080060': 'Modality',
   'x00080070': 'Manufacturer',
   'x00080080': 'Institution Name',
   'x00080090': 'Referring Physician Name',
+  'x00081090': 'Manufacturer Model Name',
+  'x00091010': 'Custom Field 1',
+  'x00091011': 'Custom Field 2',
   'x00100010': 'Patient Name',
   'x00100020': 'Patient ID',
   'x00100030': 'Patient Birth Date',
@@ -42,6 +52,7 @@ const DICOM_TAG_DESCRIPTIONS = {
   'x00200010': 'Study ID',
   'x00200011': 'Series Number',
   'x00200013': 'Instance Number',
+  'x00204000': 'Image Comments',
   'x00280002': 'Samples per Pixel',
   'x00280004': 'Photometric Interpretation',
   'x00280010': 'Rows',
@@ -50,6 +61,8 @@ const DICOM_TAG_DESCRIPTIONS = {
   'x00280101': 'Bits Stored',
   'x00280102': 'High Bit',
   'x00280103': 'Pixel Representation',
+  'x00400555': 'Acquisition Context Sequence',
+  'x54000100': 'Waveform Sequence',
 };
 
 // SOP Class UID 映射
