@@ -95,14 +95,15 @@ const OrthancPatientList = () => {
   };
 
   const handleImport = async (patient) => {
+    const hide = message.loading('Importing patient...', 0);
     try {
-      const hide = message.loading('Importing patient...', 0);
       await patientsApi.importOrthancPatient(patient);
-      hide();
       message.success('Patient imported successfully');
     } catch (error) {
       console.error('Import error:', error);
-      message.error('Failed to import patient');
+      message.error(error.message || 'Failed to import patient');
+    } finally {
+      hide();
     }
   };
 

@@ -265,17 +265,16 @@ const PatientList = () => {
                   <Button
                     type="primary"
                     onClick={async () => {
+                      const hide = message.loading('Importing patient...');
                       try {
-                        const hide = message.loading('Importing patient...', 0);
-                        // 直接使用原始的 Orthanc 病人数据
-                        const orthancPatient = patient;
-                        await patientsApi.importOrthancPatient(orthancPatient);
-                        hide();
+                        await patientsApi.importOrthancPatient(patient);
                         message.success('Patient imported successfully');
                         fetchPatients();
                       } catch (error) {
                         console.error('Import error:', error);
-                        message.error('Failed to import patient');
+                        message.error(error.message || 'Failed to import patient');
+                      } finally {
+                        hide();
                       }
                     }}
                     icon={<ImportOutlined />}

@@ -11,21 +11,29 @@ export const patientsApi = {
     request.get(API_ENDPOINTS.PATIENT_DETAIL(id)),
 
   // Create new patient
-  createPatient: (data) => {
-    const formData = new URLSearchParams();
-    formData.append('patient_id', data.patient_id);
-    formData.append('name', data.name);
-    formData.append('gender', data.gender);
-    formData.append('birth_date', data.birth_date.toISOString());
-    if (data.contact_info) {
-      formData.append('contact_info', JSON.stringify(data.contact_info));
-    }
-
-    return request.post(API_ENDPOINTS.PATIENTS, formData, {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
+  createPatient: async (data) => {
+    try {
+      const formData = new URLSearchParams();
+      formData.append('patient_id', data.patient_id);
+      formData.append('name', data.name);
+      formData.append('gender', data.gender);
+      formData.append('birth_date', data.birth_date.toISOString());
+      if (data.contact_info) {
+        formData.append('contact_info', JSON.stringify(data.contact_info));
       }
-    });
+
+      const response = await request.post(API_ENDPOINTS.PATIENTS, formData, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+      });
+      return response;
+    } catch (error) {
+      if (error.response?.status === 400 && error.response?.data?.detail === 'Patient ID already exists') {
+        throw new Error('A patient with this ID already exists. Please use a different patient ID.');
+      }
+      throw error;
+    }
   },
 
   // Update patient
@@ -93,18 +101,26 @@ export const patientsApi = {
     request.get('/api/orthanc/patients/search', { params: { query } }),
 
   // Import patient from Orthanc to local database
-  importOrthancPatient: (patient) => {
+  importOrthancPatient: async (patient) => {
     const formData = new URLSearchParams();
     formData.append('patient_id', patient.ID);
     formData.append('name', patient.MainDicomTags.PatientName || 'Anonymous');
     formData.append('gender', patient.MainDicomTags.PatientSex || 'Unknown');
     formData.append('birth_date', patient.MainDicomTags.PatientBirthDate || '1900-01-01');
 
-    return request.post('/api/patients', formData, {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
+    try {
+      const response = await request.post('/api/patients', formData, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+      });
+      return response;
+    } catch (error) {
+      if (error.response?.status === 400) {
+        throw new Error(error.response.data.detail || 'Failed to import patient');
       }
-    });
+      throw error;
+    }
   },
 
   // Get patient's ECG files
