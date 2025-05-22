@@ -1,8 +1,9 @@
-import React from 'react';
-import { Input, Card, List, Button, Avatar, Typography, Space } from 'antd';
+import React, { useState, useEffect } from 'react';
+import { Input, Card, List, Button, Avatar, Typography, Space, message, Modal } from 'antd';
 import { SearchOutlined, EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import styled from '@emotion/styled';
 import { useNavigate } from 'react-router-dom';
+import { usersApi } from '../../services/api/users';
 
 const { Title } = Typography;
 
@@ -57,30 +58,28 @@ const ActionButtons = styled(Space)`
 const DoctorList = () => {
   const navigate = useNavigate();
 
-  // Sample data
-  const doctors = [
-    {
-      id: 'XXXXXXXX',
-      name: 'Dr Wilson',
-      gender: 'Male',
-      age: 35,
-      avatar: null,
-    },
-    {
-      id: 'XXXXXXXX',
-      name: 'Dr Smith',
-      gender: 'Male',
-      age: 44,
-      avatar: null,
-    },
-    {
-      id: 'XXXXXXXX',
-      name: 'Dr Dahail',
-      gender: 'Female',
-      age: 29,
-      avatar: null,
-    },
-  ];
+  const [doctors, setDoctors] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [searchText, setSearchText] = useState('');
+
+  useEffect(() => {
+    fetchDoctors();
+  }, []);
+
+  const fetchDoctors = async () => {
+    try {
+      setLoading(true);
+      console.log('Fetching doctors...');
+      const doctorsData = await usersApi.getUsers();
+      console.log('API Response:', doctorsData);
+      setDoctors(Array.isArray(doctorsData) ? doctorsData : []);
+    } catch (error) {
+      message.error('Failed to fetch doctors list');
+      console.error('Error fetching doctors:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleAddDoctor = () => {
     navigate('/doctors/add');
@@ -90,37 +89,68 @@ const DoctorList = () => {
     navigate('/doctors/' + doctorId);
   };
 
+  const handleDeleteDoctor = (doctorId) => {
+    Modal.confirm({
+      title: 'Are you sure you want to delete this doctor?',
+      content: 'This action cannot be undone.',
+      okText: 'Yes',
+      okType: 'danger',
+      cancelText: 'No',
+      onOk: async () => {
+        try {
+          await usersApi.deleteUser(doctorId);
+          message.success('Doctor deleted successfully');
+          fetchDoctors(); // Refresh the list
+        } catch (error) {
+          message.error('Failed to delete doctor');
+          console.error('Error deleting doctor:', error);
+        }
+      },
+    });
+  };
+
+  const filteredDoctors = doctors && doctors.length > 0 ? doctors.filter(doctor => 
+    (doctor.username?.toLowerCase() || '').includes(searchText.toLowerCase()) ||
+    (doctor.id?.toString() || '').includes(searchText)
+  ) : [];
+
   return (
     <PageContainer>
       <StyledCard>
         <SearchHeader>
-          <Title level={3}>Doctors Management</Title>
+          <Title level={3}>User Management</Title>
           <Button 
             type="primary" 
             icon={<PlusOutlined />}
             onClick={handleAddDoctor}
           >
-            Add Doctor
+            Add User
           </Button>
         </SearchHeader>
 
         <Input
-          placeholder="Doctor ID/Name"
+          placeholder="Search by ID or Username"
           prefix={<SearchOutlined />}
           style={{ marginBottom: 24 }}
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
         />
 
         <List
-          dataSource={doctors}
+          loading={loading}
+          dataSource={filteredDoctors}
+          locale={{ emptyText: 'No doctors found' }}
           renderItem={(doctor) => (
             <DoctorItem>
               <Avatar size={64} src={doctor.avatar}>
-                {doctor.name[0]}
+                {doctor.username[0]}
               </Avatar>
               <div className="doctor-info">
-                <div className="doctor-name">{doctor.name}</div>
+                <div className="doctor-name">{doctor.username}</div>
                 <div className="doctor-details">
-                  Doctor ID: {doctor.id} &nbsp;&nbsp; Gender: {doctor.gender} &nbsp;&nbsp; Age: {doctor.age}
+                  ID: {doctor.id} &nbsp;&nbsp; Role: {doctor.role} &nbsp;&nbsp; Email: {doctor.email}
+                  <br />
+                  Created: {new Date(doctor.created_at).toLocaleString()}
                 </div>
               </div>
               <ActionButtons>
@@ -133,6 +163,7 @@ const DoctorList = () => {
                   type="text" 
                   danger 
                   icon={<DeleteOutlined />}
+                  onClick={() => handleDeleteDoctor(doctor.id)}
                 />
                 <Button 
                   type="primary"

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Input, Card, List, Button, Avatar, Typography, Space, Modal, message, Form, DatePicker, Select } from 'antd';
-import { SearchOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { SearchOutlined, EditOutlined, DeleteOutlined, PlusOutlined, ImportOutlined } from '@ant-design/icons';
 import styled from '@emotion/styled';
 import { useNavigate } from 'react-router-dom';
 import { patientsApi } from '../../services/api/patients';
@@ -62,17 +62,44 @@ const PatientList = () => {
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
+
+  const filteredPatients = patients.filter(patient => {
+    if (!searchText) return true;
+    const searchLower = searchText.toLowerCase();
+    if (patient.source === 'orthanc') {
+      const patientId = patient.MainDicomTags?.PatientID || '';
+      const patientName = patient.MainDicomTags?.PatientName || '';
+      return patientId.toLowerCase().includes(searchLower) ||
+             patientName.toLowerCase().includes(searchLower);
+    } else {
+      return (patient.patient_id || '').toLowerCase().includes(searchLower) ||
+             (patient.name || '').toLowerCase().includes(searchLower);
+    }
+  });
+  const [searchSource, setSearchSource] = useState('local'); // 'local' or 'orthanc'
   const [modalVisible, setModalVisible] = useState(false);
   const [editingPatient, setEditingPatient] = useState(null);
 
   const fetchPatients = async () => {
     try {
       setLoading(true);
-      const response = await patientsApi.getPatients();
-      console.log('后端返回的患者数据:', response);
-      setPatients(response);
+      if (searchSource === 'local') {
+        const response = await patientsApi.getPatients();
+        console.log('本地患者数据:', response);
+        setPatients(response);
+      } else {
+        const response = await patientsApi.searchOrthancPatients(searchText);
+        console.log('Orthanc患者数据:', response);
+        // 转换Orthanc数据格式以匹配本地格式
+        const formattedPatients = response.patients.map(p => ({
+          ...p,
+          source: 'orthanc'
+        }));
+        setPatients(formattedPatients);
+      }
     } catch (error) {
-      message.error('Failed to fetch patients');
+      message.error(`Failed to fetch patients from ${searchSource === 'local' ? 'local database' : 'Orthanc server'}`);
+      console.error('Error:', error);
     } finally {
       setLoading(false);
     }
@@ -139,12 +166,6 @@ const PatientList = () => {
     }
   };
 
-  // Filter patients by name or ID
-  const filteredPatients = patients.filter(
-    (p) =>
-      p.name.toLowerCase().includes(searchText.toLowerCase()) ||
-      p.patient_id.toLowerCase().includes(searchText.toLowerCase())
-  );
 
   return (
     <PageContainer>
@@ -152,13 +173,39 @@ const PatientList = () => {
         <SearchHeader>
           <Title level={3}>Patients Management</Title>
         </SearchHeader>
-        <Input
-          prefix={<SearchOutlined />}
-          placeholder="Patient Name/ID"
-          style={{ marginBottom: 24 }}
-          onChange={(e) => setSearchText(e.target.value)}
-          value={searchText}
-        />
+        <Space direction="vertical" style={{ width: '100%', marginBottom: 24 }}>
+          <Input
+            prefix={<SearchOutlined />}
+            placeholder="Patient Name/ID"
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            onPressEnter={() => {
+              if (searchText.trim()) {
+                fetchPatients();
+              }
+            }}
+          />
+          <Space>
+            <Button
+              type={searchSource === 'local' ? 'primary' : 'default'}
+              onClick={() => {
+                setSearchSource('local');
+                fetchPatients();
+              }}
+            >
+              Search Local Database
+            </Button>
+            <Button
+              type={searchSource === 'orthanc' ? 'primary' : 'default'}
+              onClick={() => {
+                setSearchSource('orthanc');
+                fetchPatients();
+              }}
+            >
+              Search Orthanc Server
+            </Button>
+          </Space>
+        </Space>
         <List
           loading={loading}
           dataSource={filteredPatients}
@@ -168,9 +215,34 @@ const PatientList = () => {
                 {patient.name ? patient.name[0] : 'P'}
               </Avatar>
               <div className="patient-info">
-                <div className="patient-name">{patient.name}</div>
+                <div className="patient-name">
+                  {patient.source === 'orthanc' ? 
+                    (patient.MainDicomTags?.PatientName || 'Anonymous') : 
+                    patient.name
+                  }
+                </div>
                 <div className="patient-details">
-                  Patient ID: {patient.patient_id} &nbsp;&nbsp; Gender: {patient.gender} &nbsp;&nbsp; Birth: {dayjs(patient.birth_date).format('YYYY-MM-DD')}
+                  Patient ID: {patient.source === 'orthanc' ? 
+                    patient.MainDicomTags?.PatientID : 
+                    patient.patient_id
+                  } &nbsp;&nbsp; 
+                  Gender: {patient.source === 'orthanc' ? 
+                    patient.MainDicomTags?.PatientSex : 
+                    patient.gender
+                  } &nbsp;&nbsp; 
+                  Birth: {patient.source === 'orthanc' ? 
+                    (patient.MainDicomTags?.PatientBirthDate ? 
+                      dayjs(patient.MainDicomTags.PatientBirthDate).format('YYYY-MM-DD') : 
+                      'N/A'
+                    ) : 
+                    dayjs(patient.birth_date).format('YYYY-MM-DD')
+                  } &nbsp;&nbsp;
+                  Source: {patient.source || 'local'}
+                  {patient.studies && (
+                    <div style={{ color: '#1890ff', marginTop: '4px' }}>
+                      {patient.studies.length} study/studies available
+                    </div>
+                  )}
                 </div>
               </div>
               <ActionButtons>
@@ -189,12 +261,36 @@ const PatientList = () => {
                     onOk: () => handleDelete(patient.patient_id),
                   })}
                 />
-                <Button
-                  type="primary"
-                  onClick={() => navigate(`/patients/${patient.patient_id}`)}
-                >
-                  View Details
-                </Button>
+                {patient.source === 'orthanc' && (
+                  <Button
+                    type="primary"
+                    onClick={async () => {
+                      try {
+                        const hide = message.loading('Importing patient...', 0);
+                        // 直接使用原始的 Orthanc 病人数据
+                        const orthancPatient = patient;
+                        await patientsApi.importOrthancPatient(orthancPatient);
+                        hide();
+                        message.success('Patient imported successfully');
+                        fetchPatients();
+                      } catch (error) {
+                        console.error('Import error:', error);
+                        message.error('Failed to import patient');
+                      }
+                    }}
+                    icon={<ImportOutlined />}
+                  >
+                    Import
+                  </Button>
+                )}
+                {patient.source !== 'orthanc' && (
+                  <Button
+                    type="primary"
+                    onClick={() => navigate(`/patients/${patient.patient_id}`)}
+                  >
+                    View Details
+                  </Button>
+                )}
               </ActionButtons>
             </PatientItem>
           )}

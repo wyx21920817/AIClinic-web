@@ -54,19 +54,12 @@ const PatientDetail = () => {
 
   const fetchEcgFiles = async () => {
     try {
-      console.log('Fetching ECG files...');
-      setLoading(true);
-      if (!patient || !patient.id) {
-        console.log('No patient or patient ID');
-        return;
-      }
-      console.log('Fetching ECG files for patient:', patient.id);
-      const data = await patientsApi.getPatientEcgFiles(patient.id);
-      console.log('Received ECG files:', data);
-      setEcgFiles(data);
+      if (!patient || !patient.id) return;
+      const response = await patientsApi.getPatientEcgFiles(patient.id);
+      setEcgFiles(response);
     } catch (error) {
-      console.error('Failed to fetch ECG files:', error);
       message.error('Failed to fetch ECG files');
+      console.error('Error:', error);
     } finally {
       setLoading(false);
     }
@@ -185,7 +178,7 @@ const PatientDetail = () => {
           className="ecg-file-list"
           loading={loading}
           dataSource={ecgFiles}
-          renderItem={file => (
+          renderItem={(file) => (
             <List.Item
               actions={[
                 <Button
@@ -237,12 +230,9 @@ const PatientDetail = () => {
                       dataSource={file.instanceIDs || []}
                       renderItem={(instanceId) => (
                         <List.Item>
-                          <Button 
-                            type="link" 
+                          <Button
+                            type="link"
                             onClick={() => {
-                              console.log('Clicked instance ID:', instanceId);
-                              console.log('File user_id:', file.user_id);
-                              console.log('Navigating to:', `/ecg-view/${file.user_id}/${instanceId}`);
                               navigate(`/ecg-view/${file.user_id}/${instanceId}`);
                             }}
                             style={{ padding: 0 }}

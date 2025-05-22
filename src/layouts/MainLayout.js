@@ -6,7 +6,8 @@ import {
   TeamOutlined,
   UserOutlined,
   SettingOutlined,
-  LogoutOutlined
+  LogoutOutlined,
+  CloudOutlined
 } from '@ant-design/icons';
 import styled from '@emotion/styled';
 import UserInfo from '../components/UserInfo';

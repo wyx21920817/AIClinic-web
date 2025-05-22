@@ -87,4 +87,27 @@ export const patientsApi = {
   // Get patient's diagnosis
   getPatientDiagnosis: (userId) => 
     request.get(API_ENDPOINTS.ECG_DIAGNOSIS(userId)),
+
+  // Search patients from Orthanc server
+  searchOrthancPatients: (query) => 
+    request.get('/api/orthanc/patients/search', { params: { query } }),
+
+  // Import patient from Orthanc to local database
+  importOrthancPatient: (patient) => {
+    const formData = new URLSearchParams();
+    formData.append('patient_id', patient.ID);
+    formData.append('name', patient.MainDicomTags.PatientName || 'Anonymous');
+    formData.append('gender', patient.MainDicomTags.PatientSex || 'Unknown');
+    formData.append('birth_date', patient.MainDicomTags.PatientBirthDate || '1900-01-01');
+
+    return request.post('/api/patients', formData, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    });
+  },
+
+  // Get patient's ECG files
+  getPatientEcgFiles: (patientId) => 
+    request.get(`/api/ecg/patient/${patientId}/files`),
 };

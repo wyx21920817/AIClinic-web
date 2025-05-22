@@ -11,6 +11,9 @@ import AddDoctor from './pages/doctors/AddDoctor';
 import PrivateRoute from './components/PrivateRoute';
 import AuthRoute from './components/AuthRoute';
 import ECGViewer from './components/ECGViewer';
+import Account from './pages/account/Account';
+import UserDetail from './pages/doctors/UserDetail';
+import OrthancPatientList from './pages/patients/OrthancPatientList';
 import './App.css';
 
 function App() {
@@ -24,11 +27,14 @@ function App() {
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="patients" element={<PatientList />} />
+            <Route path="orthanc-patients" element={<OrthancPatientList />} />
             <Route path="patients/:patientId" element={<PatientDetail />} />
             <Route path="ecg-view/:userId/:instanceId" element={<ECGViewer />} />
             <Route path="doctors" element={<DoctorList />} />
             <Route path="doctors/add" element={<AddDoctor />} />
             <Route path="doctors/edit/:id" element={<AddDoctor />} />
+            <Route path="doctors/:userId" element={<UserDetail />} />
+            <Route path="account" element={<Account />} />
             <Route path="doctor-home" element={<PrivateRoute allowedRoles={['doctor']} />}> 
               <Route index element={<div>Doctor Home</div>} />
             </Route>
