@@ -35,7 +35,7 @@ const DICOM_TAG_DESCRIPTIONS = {
   'x00080080': 'Institution Name',
   'x00080090': 'Referring Physician Name',
   'x00081090': 'Manufacturer Model Name',
-  'x00091010': 'AI diagnosis result',
+  'x00104000': 'AI diagnosis result',
   'x00091011': 'Doctor diagnosis result',
   'x00100010': 'Patient Name',
   'x00100020': 'Patient ID',
