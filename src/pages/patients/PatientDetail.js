@@ -166,7 +166,7 @@ const PatientDetail = () => {
         </Descriptions>
       </Card>
 
-      <Card title="ECG Files" style={{ marginTop: 24 }}>
+      <Card title="ECG Files in orthanc" style={{ marginTop: 24 }}>
         <Upload
           customRequest={({ file }) => handleUpload(file)}
           showUploadList={false}
@@ -203,7 +203,7 @@ const PatientDetail = () => {
                     Modal.confirm({
                       title: 'Delete ECG File',
                       content: 'Are you sure you want to delete this file?',
-                      onOk: () => handleDeleteFile(file.id)
+                      onOk: () => handleDeleteFile(file.file_id)
                     });
                   }}
                 />
@@ -213,8 +213,8 @@ const PatientDetail = () => {
                 title={file.filename}
                 description={
                   <Space direction="vertical" style={{ width: '100%' }}>
-                    <div>Uploaded at: {dayjs(file.created_at).format('YYYY-MM-DD HH:mm:ss')}</div>
-                    {file.notes && <div>Notes: {file.notes}</div>}
+                    <div>created at: {dayjs(file.created_at).format('YYYY-MM-DD HH:mm:ss')}</div>
+                    {file.content && <div>Notes: {file.content}</div>}
                     {file.tags && (
                       <div>
                         Tags:
