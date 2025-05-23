@@ -141,7 +141,7 @@ const OrthancPatientList = () => {
                   {patient.MainDicomTags?.PatientName || 'Anonymous'}
                 </div>
                 <div className="patient-details">
-                  Patient ID: {patient.MainDicomTags?.PatientID} &nbsp;&nbsp;
+                  Patient ID: {patient.ID} &nbsp;&nbsp;
                   Gender: {patient.MainDicomTags?.PatientSex || 'Unknown'} &nbsp;&nbsp;
                   Birth: {formatDate(patient.MainDicomTags?.PatientBirthDate)}
                 </div>
