@@ -223,7 +223,7 @@ const PatientList = () => {
                 </div>
                 <div className="patient-details">
                   Patient ID: {patient.source === 'orthanc' ? 
-                    patient.MainDicomTags?.PatientID : 
+                    patient.ID : 
                     patient.patient_id
                   } &nbsp;&nbsp; 
                   Gender: {patient.source === 'orthanc' ? 

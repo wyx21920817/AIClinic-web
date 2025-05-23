@@ -13,7 +13,7 @@ import AuthRoute from './components/AuthRoute';
 import ECGViewer from './components/ECGViewer';
 import Account from './pages/account/Account';
 import UserDetail from './pages/doctors/UserDetail';
-import OrthancPatientList from './pages/patients/OrthancPatientList';
+// import OrthancPatientList from './pages/patients/OrthancPatientList';
 import './App.css';
 
 function App() {
@@ -27,7 +27,7 @@ function App() {
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="patients" element={<PatientList />} />
-            <Route path="orthanc-patients" element={<OrthancPatientList />} />
+            {/* <Route path="orthanc-patients" element={<OrthancPatientList />} /> */}
             <Route path="patients/:patientId" element={<PatientDetail />} />
             <Route path="ecg-view/:userId/:instanceId" element={<ECGViewer />} />
             <Route path="doctors" element={<DoctorList />} />

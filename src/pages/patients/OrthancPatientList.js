@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Input, Card, List, Button, Avatar, Typography, Space, message } from 'antd';
 import { SearchOutlined, FileImageOutlined, ImportOutlined } from '@ant-design/icons';
 import styled from '@emotion/styled';
@@ -65,6 +65,10 @@ const OrthancPatientList = () => {
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [total, setTotal] = useState(0);
+
+  useEffect(() => {
+    searchPatients();
+  }, []);
 
   const searchPatients = async () => {
     try {
@@ -141,7 +145,7 @@ const OrthancPatientList = () => {
                   {patient.MainDicomTags?.PatientName || 'Anonymous'}
                 </div>
                 <div className="patient-details">
-                  Patient ID: {patient.ID} &nbsp;&nbsp;
+                  ID: {patient.ID} &nbsp;&nbsp;
                   Gender: {patient.MainDicomTags?.PatientSex || 'Unknown'} &nbsp;&nbsp;
                   Birth: {formatDate(patient.MainDicomTags?.PatientBirthDate)}
                 </div>
