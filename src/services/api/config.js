@@ -1,4 +1,4 @@
-export const API_BASE_URL = 'http://54.79.224.136:8000';
+export const API_BASE_URL = 'http://52.63.231.27/:8000';
 
 export const API_ENDPOINTS = {
   // Auth
