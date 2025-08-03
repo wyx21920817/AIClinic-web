@@ -13,6 +13,9 @@ import AuthRoute from './components/AuthRoute';
 import ECGViewer from './components/ECGViewer';
 import Account from './pages/account/Account';
 import UserDetail from './pages/doctors/UserDetail';
+import TestDeliverables from './pages/TestDeliverables';
+import SimpleTest from './pages/SimpleTest';
+import AIEngineShowcase from './pages/AIEngineShowcase';
 // import OrthancPatientList from './pages/patients/OrthancPatientList';
 import './App.css';
 
@@ -35,6 +38,11 @@ function App() {
             <Route path="doctors/edit/:id" element={<AddDoctor />} />
             <Route path="doctors/:userId" element={<UserDetail />} />
             <Route path="account" element={<Account />} />
+            <Route path="test-deliverables" element={<PrivateRoute allowedRoles={['doctor', 'admin']} />}>
+              <Route index element={<TestDeliverables />} />
+            </Route>
+            <Route path="simple-test" element={<SimpleTest />} />
+            <Route path="ai-engine-showcase" element={<AIEngineShowcase />} />
             <Route path="doctor-home" element={<PrivateRoute allowedRoles={['doctor']} />}> 
               <Route index element={<div>Doctor Home</div>} />
             </Route>

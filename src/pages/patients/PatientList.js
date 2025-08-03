@@ -63,7 +63,7 @@ const PatientList = () => {
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
 
-  const filteredPatients = patients.filter(patient => {
+  const filteredPatients = (patients || []).filter(patient => {
     if (!searchText) return true;
     const searchLower = searchText.toLowerCase();
     if (patient.source === 'orthanc') {
@@ -86,20 +86,26 @@ const PatientList = () => {
       if (searchSource === 'local') {
         const response = await patientsApi.getPatients();
         console.log('本地患者数据:', response);
-        setPatients(response);
+        // Ensure response is an array
+        setPatients(Array.isArray(response) ? response : []);
       } else {
         const response = await patientsApi.searchOrthancPatients(searchText);
         console.log('Orthanc患者数据:', response);
-        // 转换Orthanc数据格式以匹配本地格式
-        const formattedPatients = response.patients.map(p => ({
-          ...p,
-          source: 'orthanc'
-        }));
-        setPatients(formattedPatients);
+        // Ensure response has patients property and it's an array
+        if (response && response.patients && Array.isArray(response.patients)) {
+          const formattedPatients = response.patients.map(p => ({
+            ...p,
+            source: 'orthanc'
+          }));
+          setPatients(formattedPatients);
+        } else {
+          setPatients([]);
+        }
       }
     } catch (error) {
       message.error(`Failed to fetch patients from ${searchSource === 'local' ? 'local database' : 'Orthanc server'}`);
       console.error('Error:', error);
+      setPatients([]); // Set empty array on error
     } finally {
       setLoading(false);
     }

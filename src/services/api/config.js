@@ -15,9 +15,21 @@ export const API_ENDPOINTS = {
   PATIENT_DETAIL: (id) => `/api/patients/${id}`,
   
   // ECG
+  ECG: '/api/ecg',
   ECG_FILES: (userId) => `/api/ecg/${userId}/files`,
-  ECG_FILE_DETAIL: (userId, fileId) => `/api/ecg/${userId}/instances/${fileId}`,
+  ECG_FILE_DETAIL: (userId, fileId) => `/api/ecg/${userId}/files/${fileId}`,
+  ECG_INSTANCE: (userId, instanceId) => `/api/ecg/${userId}/instances/${instanceId}`,
   ECG_DIAGNOSIS: (userId) => `/api/ecg/${userId}/diagnosis`,
+  ECG_PATIENT_FILES: (patientId) => `/api/ecg/patient/${patientId}/files`,
+  
+  // AI Diagnosis
+  AI_DIAGNOSIS: '/api/ai-diagnosis',
+  
+  // Doctor Feedback
+  FEEDBACK: '/api/feedback',
+  
+  // PDF Export
+  PDF: '/api/pdf',
   
   // Auth verification
   VERIFY_TOKEN: '/api/auth/verify-token',

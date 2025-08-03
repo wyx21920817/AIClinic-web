@@ -3,8 +3,15 @@ import { API_ENDPOINTS } from './config';
 
 export const patientsApi = {
   // Get all patients
-  getPatients: () => 
-    request.get(API_ENDPOINTS.PATIENTS),
+  getPatients: async () => {
+    try {
+      const response = await request.get(API_ENDPOINTS.PATIENTS);
+      return response.data || [];
+    } catch (error) {
+      console.error('Error fetching patients:', error);
+      return [];
+    }
+  },
 
   // Get patient by ID
   getPatient: (id) => 
@@ -97,8 +104,15 @@ export const patientsApi = {
     request.get(API_ENDPOINTS.ECG_DIAGNOSIS(userId)),
 
   // Search patients from Orthanc server
-  searchOrthancPatients: (query) => 
-    request.get('/api/orthanc/patients/search', { params: { query } }),
+  searchOrthancPatients: async (query) => {
+    try {
+      const response = await request.get('/api/orthanc/patients/search', { params: { query } });
+      return response.data || { patients: [] };
+    } catch (error) {
+      console.error('Error searching Orthanc patients:', error);
+      return { patients: [] };
+    }
+  },
 
   // Import patient from Orthanc to local database
   importOrthancPatient: async (patient) => {
@@ -123,7 +137,4 @@ export const patientsApi = {
     }
   },
 
-  // Get patient's ECG files
-  getPatientEcgFiles: (patientId) => 
-    request.get(`/api/ecg/patient/${patientId}/files`),
 };
