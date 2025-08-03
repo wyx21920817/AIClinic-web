@@ -88,7 +88,7 @@ export const patientsApi = {
     formData.append('notes', data.notes);
     formData.append('tags', data.tags);
 
-    return request.put(API_ENDPOINTS.ECG_FILE_DETAIL(userId, fileId), formData, {
+    return request.put(API_ENDPOINTS.ECG_FILE_UPDATE(userId, fileId), formData, {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded'
       }
@@ -97,7 +97,7 @@ export const patientsApi = {
 
   // Delete ECG file
   deleteEcgFile: (userId, fileId) => 
-    request.delete(API_ENDPOINTS.ECG_FILE_DETAIL(userId, fileId)),
+    request.delete(API_ENDPOINTS.ECG_FILE_UPDATE(userId, fileId)),
 
   // Get patient's diagnosis
   getPatientDiagnosis: (userId) => 

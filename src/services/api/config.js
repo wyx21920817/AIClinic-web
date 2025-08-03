@@ -17,8 +17,10 @@ export const API_ENDPOINTS = {
   // ECG
   ECG: '/api/ecg',
   ECG_FILES: (userId) => `/api/ecg/${userId}/files`,
+<<<<<<< HEAD
   ECG_FILE_DETAIL: (userId, fileId) => `/api/ecg/${userId}/files/${fileId}`,
   ECG_INSTANCE: (userId, instanceId) => `/api/ecg/${userId}/instances/${instanceId}`,
+  ECG_FILE_UPDATE: (userId, fileId) => `/api/ecg/${userId}/files/${fileId}`,
   ECG_DIAGNOSIS: (userId) => `/api/ecg/${userId}/diagnosis`,
   ECG_PATIENT_FILES: (patientId) => `/api/ecg/patient/${patientId}/files`,
   
