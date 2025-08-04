@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Card, Typography, Space, Button, Divider, Alert, Row, Col, Tag, Progress, List, Collapse } from 'antd';
-import { BrainOutlined, CodeOutlined, FileTextOutlined, DatabaseOutlined, ThunderboltOutlined, LinkOutlined } from '@ant-design/icons';
+import { ExperimentOutlined, CodeOutlined, FileTextOutlined, DatabaseOutlined, ThunderboltOutlined, LinkOutlined } from '@ant-design/icons';
 
 const { Title, Text, Paragraph } = Typography;
 const { Panel } = Collapse;

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Menu } from 'antd';
-import { DashboardOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons';
+import { DashboardOutlined, TeamOutlined, UserOutlined, ExperimentOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 
 const Sidebar = () => {
@@ -31,6 +31,12 @@ const Sidebar = () => {
           },
         ]
       : []),
+    {
+      key: '/xai-demo',
+      icon: <ExperimentOutlined />,
+      label: 'XAI Demo',
+      onClick: () => navigate('/xai-demo'),
+    },
     {
       key: '/account',
       icon: <UserOutlined />,

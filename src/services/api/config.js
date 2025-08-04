@@ -10,6 +10,10 @@ export const API_ENDPOINTS = {
   USERS: '/api/users',
   USER_DETAIL: (id) => `/api/user/${id}`,
   
+  // Doctors
+  DOCTORS: '/api/doctors',
+  DOCTOR_DETAIL: (id) => `/api/doctors/${id}`,
+  
   // Patients
   PATIENTS: '/api/patients',
   PATIENT_DETAIL: (id) => `/api/patients/${id}`,

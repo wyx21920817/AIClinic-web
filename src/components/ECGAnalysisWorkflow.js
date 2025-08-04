@@ -169,6 +169,51 @@ const ECGAnalysisWorkflow = ({
     }
   };
 
+  // Handle Re-analysis Request
+  const handleReanalysisRequest = async (feedbackData) => {
+    setLoading(true);
+    
+    try {
+      message.info('Submitting re-analysis request...');
+      
+      // Submit feedback with re-analysis request
+      const feedbackResponse = await feedbackAPI.submitFeedback({
+        ...feedbackData,
+        ecgFileId,
+        patientId,
+        doctorId,
+        aiDiagnosisId: aiDiagnosis?.id,
+        requestReanalysis: true
+      });
+      
+      setDoctorFeedback(feedbackResponse);
+      
+      // Generate new AI diagnosis with doctor's feedback
+      message.info('Generating new AI diagnosis with your feedback...');
+      
+      const newDiagnosisResponse = await aiDiagnosisAPI.requestDiagnosis(ecgFileId, {
+        includeConfidence: true,
+        includeHighlightedLeads: true,
+        includeRecommendations: true,
+        doctorFeedback: feedbackData.comment,
+        reanalysisReason: feedbackData.reanalysisReason
+      });
+      
+      setAiDiagnosis(newDiagnosisResponse);
+      
+      message.success('New AI diagnosis generated with your feedback!');
+      
+      // Reset to doctor review step for the new diagnosis
+      setCurrentStep(2);
+      
+    } catch (error) {
+      handleAPIError(error);
+      message.error('Failed to process re-analysis request');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Step 3: Handle PDF Export
   const handlePDFExport = async (reportSettings) => {
     setLoading(true);
@@ -296,6 +341,7 @@ const ECGAnalysisWorkflow = ({
       <DoctorFeedbackInterface
         aiDiagnosis={aiDiagnosis}
         onFeedbackSubmit={handleFeedbackSubmit}
+        onRequestReanalysis={handleReanalysisRequest}
         onToggleAIView={handleToggleAIOverlay}
         showAIView={showAIOverlay}
         patientId={patientId}

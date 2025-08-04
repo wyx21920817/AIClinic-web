@@ -6,6 +6,11 @@ export const patientsApi = {
   getPatients: async () => {
     try {
       const response = await request.get(API_ENDPOINTS.PATIENTS);
+      // Handle new paginated response format
+      if (response.data && response.data.items) {
+        return response.data.items || [];
+      }
+      // Fallback for old format
       return response.data || [];
     } catch (error) {
       console.error('Error fetching patients:', error);
