@@ -39,7 +39,7 @@ How may I assist you today?`,
   };
 
   useEffect(() => {
-    // 使用 setTimeout 确保在 DOM 更新后滚动
+    // Use setTimeout to ensure scrolling after DOM updates
     setTimeout(scrollToBottom, 100);
   }, [messages]);
 
@@ -139,7 +139,7 @@ How may I assist you today?`,
           <button 
             className="header-button" 
             onClick={() => {
-              if (!isExpanded) return; // 只在展开状态下可以最大化
+              if (!isExpanded) return; // Can only maximize when expanded
               setIsMaximized(!isMaximized);
             }}
             title={isMaximized ? 'Restore' : 'Maximize'}
@@ -150,12 +150,12 @@ How may I assist you today?`,
             className="header-button" 
             onClick={() => {
               if (isExpanded) {
-                // 最小化时，保存当前状态
+                // When minimizing, save the current state
                 setPreviousState({ expanded: true, maximized: isMaximized });
                 setIsExpanded(false);
                 setIsMaximized(false);
               } else {
-                // 展开时，恢复之前的状态
+                // When expanding, restore the previous state
                 setIsExpanded(true);
                 setIsMaximized(previousState.maximized);
               }

@@ -14,7 +14,7 @@ import { API_ENDPOINTS, API_BASE_URL } from '../services/api/config';
 const { Title } = Typography;
 const { Dragger } = Upload;
 
-// DICOM 标签描述映射
+// DICOM tag description mapping
 const DICOM_TAG_DESCRIPTIONS = {
   'x00020000': 'File Meta Information Group Length',
   'x00020002': 'Media Storage SOP Class UID',
@@ -65,7 +65,7 @@ const DICOM_TAG_DESCRIPTIONS = {
   'x54000100': 'Waveform Sequence',
 };
 
-// SOP Class UID 映射
+// SOP Class UID mapping
 const SOP_CLASS_DESCRIPTIONS = {
   '1.2.840.10008.5.1.4.1.1.9.1.1': '12-Lead ECG Waveform Storage',
   '1.2.840.10008.5.1.4.1.1.9.1.2': 'General ECG Waveform Storage',
@@ -108,12 +108,12 @@ const ECGViewer = () => {
         const byteArray = new Uint8Array(response);
         const dataSet = dicomParser.parseDicom(byteArray);
         
-        // 收集所有 DICOM 标签
+        // Collect all DICOM tags
         const tags = {};
         for (let tag in dataSet.elements) {
           const element = dataSet.elements[tag];
           if (element.items) {
-            // 如果是序列，我们只记录它是一个序列
+            // If it's a sequence, we only record that it is a sequence
             tags[tag] = 'Sequence with ' + element.items.length + ' items';
           } else {
             try {

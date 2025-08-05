@@ -85,12 +85,12 @@ const PatientList = () => {
       setLoading(true);
       if (searchSource === 'local') {
         const response = await patientsApi.getPatients();
-        console.log('本地患者数据:', response);
+        console.log('Local patient data:', response);
         // Ensure response is an array
         setPatients(Array.isArray(response) ? response : []);
       } else {
         const response = await patientsApi.searchOrthancPatients(searchText);
-        console.log('Orthanc患者数据:', response);
+        console.log('Orthanc patient data:', response);
         // Ensure response has patients property and it's an array
         if (response && response.patients && Array.isArray(response.patients)) {
           const formattedPatients = response.patients.map(p => ({
@@ -115,7 +115,7 @@ const PatientList = () => {
     fetchPatients();
   }, []);
 
-  // MOCK 数据演示（如需后端数据可删除此段）
+  // MOCK data demonstration (can be removed if backend data is needed)
   // useEffect(() => {
   //   setPatients([
   //     {

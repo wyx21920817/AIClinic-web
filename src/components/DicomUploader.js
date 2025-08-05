@@ -54,8 +54,8 @@ const DicomUploader = ({ onUpload }) => {
         />
         <label htmlFor="file-input" style={{ cursor: 'pointer' }}>
           <div>
-            <p>拖拽DICOM文件到此处</p>
-            <p>或</p>
+            <p>Drag DICOM files here</p>
+            <p>or</p>
             <button 
               style={{
                 padding: '10px 20px',
@@ -66,7 +66,7 @@ const DicomUploader = ({ onUpload }) => {
                 cursor: 'pointer'
               }}
             >
-              选择文件
+              Select File
             </button>
           </div>
         </label>
