@@ -6,7 +6,27 @@ const ChatDialog = () => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [isMaximized, setIsMaximized] = useState(false);
   const [previousState, setPreviousState] = useState({ expanded: true, maximized: false });
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState([{
+    content: `Welcome! I'm your medical AI assistant. Here are some examples of what you can ask:
+
+🔍 Query Patient: "Show me patient John Smith's records"
+
+👤 Switch Patient: "Switch to patient ID 12345"
+
+💓 View ECG data: "Display the latest ECG for current patient"
+
+📊 Analyze ECG data: "What's abnormal in this ECG?"
+
+📝 Generate Report: "Create a summary report for this patient"
+
+📥 Export Report: "Export this report as PDF"
+
+❓ Medical Questions: "What are common causes of arrhythmia?"
+
+How may I assist you today?`,
+    isUser: false,
+    timestamp: new Date().toLocaleTimeString()
+  }]);
   const [inputMessage, setInputMessage] = useState('');
   const [conversationId, setConversationId] = useState(null);
   const messagesEndRef = useRef(null);
@@ -26,7 +46,7 @@ const ChatDialog = () => {
   // Initialize conversation on component mount
   useEffect(() => {
     initializeConversation();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const initializeConversation = async () => {
     try {
