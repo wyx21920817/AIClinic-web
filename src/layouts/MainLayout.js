@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Layout, Menu, Avatar, Dropdown, Space } from 'antd';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import ChatDialog from '../components/ChatDialog/ChatDialog.js';
 import {
   DashboardOutlined,
   TeamOutlined,
@@ -113,6 +114,7 @@ const MainLayout = () => {
         </StyledHeader>
         <Content style={{ margin: '24px 16px', overflow: 'initial' }}>
           <Outlet />
+          <ChatDialog />
         </Content>
       </Layout>
     </StyledLayout>
