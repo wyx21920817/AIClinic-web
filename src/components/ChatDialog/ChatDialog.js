@@ -50,7 +50,7 @@ How may I assist you today?`,
 
   const initializeConversation = async () => {
     try {
-      const response = await fetch('http://52.63.231.27:8888/api/chat', {
+      const response = await fetch('http://54.79.181.49:8888/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -84,7 +84,7 @@ How may I assist you today?`,
     setInputMessage('');
 
     try {
-      const response = await fetch('http://52.63.231.27:8888/api/chat', {
+      const response = await fetch('http://54.79.181.49:8888/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
