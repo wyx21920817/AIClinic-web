@@ -1,4 +1,6 @@
+// 配置 API 地址
 export const API_BASE_URL = 'http://54.79.181.49:8000';
+export const CHAT_API_URL = 'http://54.79.181.49:8888';
 
 export const API_ENDPOINTS = {
   // Auth
@@ -39,4 +41,7 @@ export const API_ENDPOINTS = {
   // Auth verification
   VERIFY_TOKEN: '/api/auth/verify-token',
   TEMP_TOKEN: '/api/auth/temp-token',
+
+  // Chat
+  CHAT: '/api/chat',
 };

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { marked } from 'marked';
+import { CHAT_API_URL, API_ENDPOINTS } from '../../services/api/config';
 import './ChatDialog.css';
 
 const ChatDialog = () => {
@@ -50,7 +51,7 @@ How may I assist you today?`,
 
   const initializeConversation = async () => {
     try {
-      const response = await fetch('http://54.79.181.49:8888/api/chat', {
+      const response = await fetch(`${CHAT_API_URL}${API_ENDPOINTS.CHAT}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -84,7 +85,7 @@ How may I assist you today?`,
     setInputMessage('');
 
     try {
-      const response = await fetch('http://54.79.181.49:8888/api/chat', {
+      const response = await fetch(`${CHAT_API_URL}${API_ENDPOINTS.CHAT}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
