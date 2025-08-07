@@ -100,7 +100,7 @@ const ECGViewer = () => {
         
         console.log('Fetching ECG file for user:', userId, 'instance:', instanceId);
         const response = await request.get(
-          API_ENDPOINTS.ECG_FILE_DETAIL(userId, instanceId),
+          API_ENDPOINTS.ECG_INSTANCE(userId, instanceId),
           { responseType: 'arraybuffer' }
         );
 

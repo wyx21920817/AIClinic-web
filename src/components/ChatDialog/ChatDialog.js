@@ -3,9 +3,9 @@ import { marked } from 'marked';
 import './ChatDialog.css';
 
 const ChatDialog = () => {
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
-  const [previousState, setPreviousState] = useState({ expanded: true, maximized: false });
+  const [previousState, setPreviousState] = useState({ expanded: false, maximized: false });
   const [messages, setMessages] = useState([{
     content: `Welcome! I'm your medical AI assistant. Here are some examples of what you can ask:
 
