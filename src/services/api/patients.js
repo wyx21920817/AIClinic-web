@@ -2,24 +2,41 @@ import request from './request';
 import { API_ENDPOINTS } from './config';
 
 export const patientsApi = {
-  // Get all patients
-  getPatients: async () => {
+  // Get all patients with pagination support
+  getPatients: async (params = {}) => {
     try {
-      const response = await request.get(API_ENDPOINTS.PATIENTS);
-      // Handle new paginated response format
-      if (response.data && response.data.items) {
-        return response.data.items || [];
+      const response = await request.get(API_ENDPOINTS.PATIENTS, { params });
+
+      // Interceptor returns response.data already
+      if (response && response.items) {
+        return {
+          items: response.items,
+          total: response.total ?? 0,
+          page: response.page ?? 1,
+          page_size: response.page_size ?? params.page_size ?? 10,
+        };
       }
-      // Fallback for old format
-      return response.data || [];
+
+      // Fallback for array response
+      return {
+        items: Array.isArray(response) ? response : [],
+        total: Array.isArray(response) ? response.length : 0,
+        page: params.page || 1,
+        page_size: params.page_size || (Array.isArray(response) ? response.length : 10),
+      };
     } catch (error) {
       console.error('Error fetching patients:', error);
-      return [];
+      return {
+        items: [],
+        total: 0,
+        page: params.page || 1,
+        page_size: params.page_size || 10,
+      };
     }
   },
 
   // Get patient by ID
-  getPatient: (id) => 
+  getPatient: (id) =>
     request.get(API_ENDPOINTS.PATIENT_DETAIL(id)),
 
   // Create new patient
@@ -64,15 +81,15 @@ export const patientsApi = {
   },
 
   // Delete patient
-  deletePatient: (id) => 
+  deletePatient: (id) =>
     request.delete(API_ENDPOINTS.PATIENT_DETAIL(id)),
 
   // Get patient's ECG files
-  getPatientEcgFiles: (userId) => 
+  getPatientEcgFiles: (userId) =>
     request.get(API_ENDPOINTS.ECG_FILES(userId)),
 
   // Get patient's ECG file
-  getPatientEcgFile: (userId, fileId, options = {}) => 
+  getPatientEcgFile: (userId, fileId, options = {}) =>
     request.get(API_ENDPOINTS.ECG_FILE_DETAIL(userId, fileId), { params: options }),
 
   // Upload ECG file
@@ -101,18 +118,49 @@ export const patientsApi = {
   },
 
   // Delete ECG file
-  deleteEcgFile: (userId, fileId) => 
+  deleteEcgFile: (userId, fileId) =>
     request.delete(API_ENDPOINTS.ECG_FILE_UPDATE(userId, fileId)),
 
   // Get patient's diagnosis
-  getPatientDiagnosis: (userId) => 
+  getPatientDiagnosis: (userId) =>
     request.get(API_ENDPOINTS.ECG_DIAGNOSIS(userId)),
+
+  // Get doctor's patients with pagination support
+  getDoctorPatients: async (params = {}) => {
+    try {
+      const response = await request.get(API_ENDPOINTS.DOCTOR_PATIENTS, { params });
+
+      if (response && response.items) {
+        return {
+          items: response.items,
+          total: response.total ?? 0,
+          page: response.page ?? 1,
+          page_size: response.page_size ?? params.page_size ?? 10,
+        };
+      }
+
+      return {
+        items: Array.isArray(response) ? response : [],
+        total: Array.isArray(response) ? response.length : 0,
+        page: params.page || 1,
+        page_size: params.page_size || (Array.isArray(response) ? response.length : 10),
+      };
+    } catch (error) {
+      console.error('Error fetching doctor patients:', error);
+      return {
+        items: [],
+        total: 0,
+        page: params.page || 1,
+        page_size: params.page_size || 10,
+      };
+    }
+  },
 
   // Search patients from Orthanc server
   searchOrthancPatients: async (query) => {
     try {
       const response = await request.get('/api/orthanc/patients/search', { params: { query } });
-      return response.data || { patients: [] };
+      return response || { patients: [] };
     } catch (error) {
       console.error('Error searching Orthanc patients:', error);
       return { patients: [] };

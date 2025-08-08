@@ -62,6 +62,11 @@ const PatientList = () => {
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const [pagination, setPagination] = useState({
+    current: 1,
+    pageSize: 10,
+    total: 0
+  });
 
   const filteredPatients = (patients || []).filter(patient => {
     if (!searchText) return true;
@@ -70,24 +75,43 @@ const PatientList = () => {
       const patientId = patient.MainDicomTags?.PatientID || '';
       const patientName = patient.MainDicomTags?.PatientName || '';
       return patientId.toLowerCase().includes(searchLower) ||
-             patientName.toLowerCase().includes(searchLower);
+        patientName.toLowerCase().includes(searchLower);
     } else {
       return (patient.patient_id || '').toLowerCase().includes(searchLower) ||
-             (patient.name || '').toLowerCase().includes(searchLower);
+        (patient.name || '').toLowerCase().includes(searchLower);
     }
   });
   const [searchSource, setSearchSource] = useState('local'); // 'local' or 'orthanc'
   const [modalVisible, setModalVisible] = useState(false);
   const [editingPatient, setEditingPatient] = useState(null);
 
-  const fetchPatients = async () => {
+  const fetchPatients = async (page = 1, pageSize = 10) => {
     try {
       setLoading(true);
       if (searchSource === 'local') {
-        const response = await patientsApi.getPatients();
+        const response = await patientsApi.getPatients({
+          page,
+          page_size: pageSize
+        });
         console.log('Local patient data:', response);
-        // Ensure response is an array
-        setPatients(Array.isArray(response) ? response : []);
+
+        // Handle new paginated response structure
+        if (response && response.items) {
+          setPatients(response.items);
+          setPagination({
+            current: response.page || page,
+            pageSize: response.page_size || pageSize,
+            total: response.total || 0
+          });
+        } else {
+          // Fallback for old format
+          setPatients(Array.isArray(response) ? response : []);
+          setPagination({
+            current: page,
+            pageSize: pageSize,
+            total: Array.isArray(response) ? response.length : 0
+          });
+        }
       } else {
         const response = await patientsApi.searchOrthancPatients(searchText);
         console.log('Orthanc patient data:', response);
@@ -98,14 +122,29 @@ const PatientList = () => {
             source: 'orthanc'
           }));
           setPatients(formattedPatients);
+          setPagination({
+            current: 1,
+            pageSize: 10,
+            total: formattedPatients.length
+          });
         } else {
           setPatients([]);
+          setPagination({
+            current: 1,
+            pageSize: 10,
+            total: 0
+          });
         }
       }
     } catch (error) {
-      message.error(`Failed to fetch patients from ${searchSource === 'local' ? 'local database' : 'Orthanc server'}`);
-      console.error('Error:', error);
-      setPatients([]); // Set empty array on error
+      console.error('Error fetching patients:', error);
+      message.error('Failed to fetch patients');
+      setPatients([]);
+      setPagination({
+        current: 1,
+        pageSize: 10,
+        total: 0
+      });
     } finally {
       setLoading(false);
     }
@@ -114,6 +153,18 @@ const PatientList = () => {
   useEffect(() => {
     fetchPatients();
   }, []);
+
+  // Handle pagination change
+  const handlePageChange = (page, pageSize) => {
+    fetchPatients(page, pageSize);
+  };
+
+  // Handle search source change
+  const handleSearchSourceChange = (value) => {
+    setSearchSource(value);
+    setSearchText('');
+    fetchPatients();
+  };
 
   // MOCK data demonstration (can be removed if backend data is needed)
   // useEffect(() => {
@@ -215,6 +266,15 @@ const PatientList = () => {
         <List
           loading={loading}
           dataSource={filteredPatients}
+          pagination={{
+            current: pagination.current,
+            pageSize: pagination.pageSize,
+            total: pagination.total,
+            onChange: handlePageChange,
+            showSizeChanger: true,
+            showQuickJumper: true,
+            showTotal: (total, range) => `Showing ${range[0]}-${range[1]} of ${total} patients`
+          }}
           renderItem={(patient) => (
             <PatientItem>
               <Avatar size={64}>
@@ -222,25 +282,25 @@ const PatientList = () => {
               </Avatar>
               <div className="patient-info">
                 <div className="patient-name">
-                  {patient.source === 'orthanc' ? 
-                    (patient.MainDicomTags?.PatientName || 'Anonymous') : 
+                  {patient.source === 'orthanc' ?
+                    (patient.MainDicomTags?.PatientName || 'Anonymous') :
                     patient.name
                   }
                 </div>
                 <div className="patient-details">
-                  Patient ID: {patient.source === 'orthanc' ? 
-                    patient.ID : 
+                  Patient ID: {patient.source === 'orthanc' ?
+                    patient.ID :
                     patient.patient_id
-                  } &nbsp;&nbsp; 
-                  Gender: {patient.source === 'orthanc' ? 
-                    patient.MainDicomTags?.PatientSex : 
+                  } &nbsp;&nbsp;
+                  Gender: {patient.source === 'orthanc' ?
+                    patient.MainDicomTags?.PatientSex :
                     patient.gender
-                  } &nbsp;&nbsp; 
-                  Birth: {patient.source === 'orthanc' ? 
-                    (patient.MainDicomTags?.PatientBirthDate ? 
-                      dayjs(patient.MainDicomTags.PatientBirthDate).format('YYYY-MM-DD') : 
+                  } &nbsp;&nbsp;
+                  Birth: {patient.source === 'orthanc' ?
+                    (patient.MainDicomTags?.PatientBirthDate ?
+                      dayjs(patient.MainDicomTags.PatientBirthDate).format('YYYY-MM-DD') :
                       'N/A'
-                    ) : 
+                    ) :
                     dayjs(patient.birth_date).format('YYYY-MM-DD')
                   } &nbsp;&nbsp;
                   Source: {patient.source || 'local'}

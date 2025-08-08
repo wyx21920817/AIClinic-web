@@ -61,24 +61,60 @@ const DoctorList = () => {
   const [doctors, setDoctors] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const [pagination, setPagination] = useState({
+    current: 1,
+    pageSize: 10,
+    total: 0
+  });
 
   useEffect(() => {
     fetchDoctors();
   }, []);
 
-  const fetchDoctors = async () => {
+  const fetchDoctors = async (page = 1, pageSize = 10) => {
     try {
       setLoading(true);
       console.log('Fetching doctors...');
-      const doctorsData = await usersApi.getUsers();
-      console.log('API Response:', doctorsData);
-      setDoctors(Array.isArray(doctorsData) ? doctorsData : []);
+      const response = await usersApi.getUsers({
+        page,
+        page_size: pageSize
+      });
+      console.log('API Response:', response);
+
+      // Handle new paginated response structure
+      if (response && response.items) {
+        setDoctors(response.items);
+        setPagination({
+          current: response.page || page,
+          pageSize: response.page_size || pageSize,
+          total: response.total || 0
+        });
+      } else {
+        // Fallback for old format
+        setDoctors(Array.isArray(response) ? response : []);
+        setPagination({
+          current: page,
+          pageSize: pageSize,
+          total: Array.isArray(response) ? response.length : 0
+        });
+      }
     } catch (error) {
       message.error('Failed to fetch doctors list');
       console.error('Error fetching doctors:', error);
+      setDoctors([]);
+      setPagination({
+        current: 1,
+        pageSize: 10,
+        total: 0
+      });
     } finally {
       setLoading(false);
     }
+  };
+
+  // Handle pagination change
+  const handlePageChange = (page, pageSize) => {
+    fetchDoctors(page, pageSize);
   };
 
   const handleAddDoctor = () => {
@@ -100,7 +136,7 @@ const DoctorList = () => {
         try {
           await usersApi.deleteUser(doctorId);
           message.success('Doctor deleted successfully');
-          fetchDoctors(); // Refresh the list
+          fetchDoctors(pagination.current, pagination.pageSize); // Refresh the list with current pagination
         } catch (error) {
           message.error('Failed to delete doctor');
           console.error('Error deleting doctor:', error);
@@ -109,7 +145,7 @@ const DoctorList = () => {
     });
   };
 
-  const filteredDoctors = doctors && doctors.length > 0 ? doctors.filter(doctor => 
+  const filteredDoctors = doctors && doctors.length > 0 ? doctors.filter(doctor =>
     (doctor.username?.toLowerCase() || '').includes(searchText.toLowerCase()) ||
     (doctor.id?.toString() || '').includes(searchText)
   ) : [];
@@ -119,8 +155,8 @@ const DoctorList = () => {
       <StyledCard>
         <SearchHeader>
           <Title level={3}>User Management</Title>
-          <Button 
-            type="primary" 
+          <Button
+            type="primary"
             icon={<PlusOutlined />}
             onClick={handleAddDoctor}
           >
@@ -140,6 +176,15 @@ const DoctorList = () => {
           loading={loading}
           dataSource={filteredDoctors}
           locale={{ emptyText: 'No doctors found' }}
+          pagination={{
+            current: pagination.current,
+            pageSize: pagination.pageSize,
+            total: pagination.total,
+            onChange: handlePageChange,
+            showSizeChanger: true,
+            showQuickJumper: true,
+            showTotal: (total, range) => `Showing ${range[0]}-${range[1]} of ${total} doctors`
+          }}
           renderItem={(doctor) => (
             <DoctorItem>
               <Avatar size={64} src={doctor.avatar}>
@@ -154,18 +199,18 @@ const DoctorList = () => {
                 </div>
               </div>
               <ActionButtons>
-                <Button 
-                  type="text" 
+                <Button
+                  type="text"
                   icon={<EditOutlined />}
                   onClick={() => navigate('/doctors/edit/' + doctor.id)}
                 />
-                <Button 
-                  type="text" 
-                  danger 
+                <Button
+                  type="text"
+                  danger
                   icon={<DeleteOutlined />}
                   onClick={() => handleDeleteDoctor(doctor.id)}
                 />
-                <Button 
+                <Button
                   type="primary"
                   onClick={() => handleViewDetails(doctor.id)}
                 >

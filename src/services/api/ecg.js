@@ -54,7 +54,7 @@ export const ecgAPI = {
   // Update ECG file metadata
   updateECGFile: async (userId, instanceId, notes, tags) => {
     try {
-      const formData = new FormData();
+      const formData = new URLSearchParams();
       formData.append('notes', notes);
       formData.append('tags', tags);
 
@@ -63,7 +63,7 @@ export const ecgAPI = {
         formData,
         {
           headers: {
-            'Content-Type': 'multipart/form-data',
+            'Content-Type': 'application/x-www-form-urlencoded',
           },
         }
       );
@@ -253,7 +253,7 @@ export const handleAPIError = (error) => {
   if (error.response) {
     // Server responded with error status
     const { status, data } = error.response;
-    
+
     switch (status) {
       case 401:
         throw new Error('Authentication required. Please log in again.');

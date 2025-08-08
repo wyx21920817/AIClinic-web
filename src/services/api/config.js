@@ -7,19 +7,20 @@ export const API_ENDPOINTS = {
   LOGIN: '/api/login',
   LOGIN_MFA: '/api/login/mfa',
   REGISTER: '/api/register',
-  
+
   // Users
   USERS: '/api/users',
   USER_DETAIL: (id) => `/api/user/${id}`,
-  
+
   // Doctors
   DOCTORS: '/api/doctors',
   DOCTOR_DETAIL: (id) => `/api/doctors/${id}`,
-  
+  DOCTOR_PATIENTS: '/api/doctors/patients',
+
   // Patients
   PATIENTS: '/api/patients',
   PATIENT_DETAIL: (id) => `/api/patients/${id}`,
-  
+
   // ECG
   ECG: '/api/ecg',
   ECG_FILES: (userId) => `/api/ecg/${userId}/files`,
@@ -28,16 +29,16 @@ export const API_ENDPOINTS = {
   ECG_FILE_UPDATE: (userId, fileId) => `/api/ecg/${userId}/files/${fileId}`,
   ECG_DIAGNOSIS: (userId) => `/api/ecg/${userId}/diagnosis`,
   ECG_PATIENT_FILES: (patientId) => `/api/ecg/patient/${patientId}/files`,
-  
+
   // AI Diagnosis
   AI_DIAGNOSIS: '/api/ai-diagnosis',
-  
+
   // Doctor Feedback
   FEEDBACK: '/api/feedback',
-  
+
   // PDF Export
   PDF: '/api/pdf',
-  
+
   // Auth verification
   VERIFY_TOKEN: '/api/auth/verify-token',
   TEMP_TOKEN: '/api/auth/temp-token',
