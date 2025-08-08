@@ -36,9 +36,12 @@ export const API_ENDPOINTS = {
   // Doctor Feedback
   FEEDBACK: '/api/feedback',
 
-  // PDF Export
+    // PDF Export
   PDF: '/api/pdf',
-
+  
+  // Audit Logs
+  AUDIT: '/api/audit',
+  
   // Auth verification
   VERIFY_TOKEN: '/api/auth/verify-token',
   TEMP_TOKEN: '/api/auth/temp-token',

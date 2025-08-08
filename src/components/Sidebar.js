@@ -1,12 +1,16 @@
 import React from 'react';
 import { Menu } from 'antd';
-import { DashboardOutlined, TeamOutlined, UserOutlined, ExperimentOutlined } from '@ant-design/icons';
+import { DashboardOutlined, TeamOutlined, UserOutlined, ExperimentOutlined, FileTextOutlined, SecurityScanOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 
 const Sidebar = () => {
   const navigate = useNavigate();
   const userData = JSON.parse(localStorage.getItem('userData') || '{}');
   const role = userData.role;
+
+  // Debug: Log user role
+  console.log('Sidebar - User role:', role);
+  console.log('Sidebar - User data:', userData);
 
   const menuItems = [
     {
@@ -29,8 +33,20 @@ const Sidebar = () => {
             label: 'Doctors',
             onClick: () => navigate('/doctors'),
           },
+          {
+            key: '/audit-logs',
+            icon: <SecurityScanOutlined />,
+            label: 'Audit Logs',
+            onClick: () => navigate('/audit-logs'),
+          },
         ]
       : []),
+    {
+      key: '/test-deliverables',
+      icon: <FileTextOutlined />,
+      label: 'Test Deliverables',
+      onClick: () => navigate('/test-deliverables'),
+    },
     {
       key: '/xai-demo',
       icon: <ExperimentOutlined />,
@@ -44,6 +60,9 @@ const Sidebar = () => {
       onClick: () => navigate('/account'),
     },
   ];
+
+  // Debug: Log menu items
+  console.log('Sidebar - Menu items:', menuItems);
 
   return (
     <Menu

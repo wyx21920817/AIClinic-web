@@ -14,8 +14,7 @@ import {
   Alert,
   Tooltip,
   Row,
-  Col,
-  Radio
+  Col
 } from 'antd';
 import {
   CheckCircleOutlined,
@@ -26,9 +25,7 @@ import {
   SaveOutlined,
   ExclamationCircleOutlined,
   CheckOutlined,
-  CloseOutlined,
-  ReloadOutlined,
-  WarningOutlined
+  CloseOutlined
 } from '@ant-design/icons';
 
 const { TextArea } = Input;
@@ -38,7 +35,6 @@ const DoctorFeedbackInterface = ({
   aiDiagnosis,
   onFeedbackSubmit,
   onToggleAIView,
-  onRequestReanalysis,
   showAIView = true,
   patientId,
   ecgFileId,
@@ -50,13 +46,11 @@ const DoctorFeedbackInterface = ({
     comment: '',
     confidence: 0,
     corrections: [],
-    timestamp: null,
-    action: null // 'approve', 'correct', 'reanalyze'
+    timestamp: null
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [pendingAction, setPendingAction] = useState(null);
-  const [reanalysisReason, setReanalysisReason] = useState('');
 
   const handleApprove = () => {
     setPendingAction('approve');
@@ -68,44 +62,31 @@ const DoctorFeedbackInterface = ({
     setShowConfirmModal(true);
   };
 
-  const handleRequestReanalysis = () => {
-    setPendingAction('reanalyze');
-    setShowConfirmModal(true);
-  };
-
   const handleConfirmAction = async () => {
     setIsSubmitting(true);
     try {
       const feedbackData = {
         ...feedback,
         approved: pendingAction === 'approve',
-        action: pendingAction,
         timestamp: new Date().toISOString(),
         patientId,
         ecgFileId,
         doctorId,
-        aiDiagnosisId: aiDiagnosis?.id,
-        reanalysisReason: pendingAction === 'reanalyze' ? reanalysisReason : null
+        aiDiagnosisId: aiDiagnosis?.id
       };
 
-      if (pendingAction === 'reanalyze') {
-        // Handle re-analysis request
-        await onRequestReanalysis(feedbackData);
-        message.success('Re-analysis request submitted successfully!');
-      } else {
-        // Handle normal feedback submission
-        await onFeedbackSubmit(feedbackData);
-        message.success(
-          pendingAction === 'approve' 
-            ? 'AI diagnosis approved successfully!' 
-            : 'Correction submitted successfully!'
-        );
-      }
+      // Submit feedback to backend
+      await onFeedbackSubmit(feedbackData);
+      
+      message.success(
+        pendingAction === 'approve' 
+          ? 'AI diagnosis approved successfully!' 
+          : 'Correction submitted successfully!'
+      );
       
       setFeedback(prev => ({
         ...prev,
         approved: pendingAction === 'approve',
-        action: pendingAction,
         timestamp: new Date().toISOString()
       }));
       
@@ -116,7 +97,6 @@ const DoctorFeedbackInterface = ({
       setIsSubmitting(false);
       setShowConfirmModal(false);
       setPendingAction(null);
-      setReanalysisReason('');
     }
   };
 
@@ -136,7 +116,7 @@ const DoctorFeedbackInterface = ({
 
   const renderFeedbackButtons = () => (
     <Row gutter={16} style={{ marginBottom: 16 }}>
-      <Col span={8}>
+      <Col span={12}>
         <Button
           type="primary"
           icon={<CheckCircleOutlined />}
@@ -150,10 +130,10 @@ const DoctorFeedbackInterface = ({
             height: '48px'
           }}
         >
-          ✅ Approve
+          ✅ Approve AI Diagnosis
         </Button>
       </Col>
-      <Col span={8}>
+      <Col span={12}>
         <Button
           danger
           icon={<CloseCircleOutlined />}
@@ -163,25 +143,7 @@ const DoctorFeedbackInterface = ({
           loading={isSubmitting && pendingAction === 'correct'}
           style={{ height: '48px' }}
         >
-          ❌ Correct
-        </Button>
-      </Col>
-      <Col span={8}>
-        <Button
-          type="default"
-          icon={<ReloadOutlined />}
-          size="large"
-          block
-          onClick={handleRequestReanalysis}
-          loading={isSubmitting && pendingAction === 'reanalyze'}
-          style={{
-            backgroundColor: '#faad14',
-            borderColor: '#faad14',
-            color: 'white',
-            height: '48px'
-          }}
-        >
-          🔄 Re-analyze
+          ❌ Correct AI Diagnosis
         </Button>
       </Col>
     </Row>
@@ -195,8 +157,8 @@ const DoctorFeedbackInterface = ({
           label="Clinical Notes"
           rules={[
             {
-              required: feedback.action === 'correct' || feedback.action === 'reanalyze',
-              message: 'Please provide comments when correcting or requesting re-analysis'
+              required: feedback.approved === false,
+              message: 'Please provide comments when correcting AI diagnosis'
             }
           ]}
         >
@@ -225,41 +187,6 @@ const DoctorFeedbackInterface = ({
           </Text>
         </Form.Item>
       </Form>
-    </Card>
-  );
-
-  const renderReanalysisSection = () => (
-    <Card title="🔄 Re-analysis Request" style={{ marginBottom: 16 }}>
-      <Alert
-        message="Request New AI Analysis"
-        description="If you're not satisfied with the current AI diagnosis, you can request a new analysis with your feedback."
-        type="warning"
-        showIcon
-        icon={<WarningOutlined />}
-        style={{ marginBottom: 16 }}
-      />
-      
-      <Form.Item
-        label="Reason for Re-analysis"
-        required
-      >
-        <Radio.Group 
-          value={reanalysisReason} 
-          onChange={(e) => setReanalysisReason(e.target.value)}
-        >
-          <Space direction="vertical">
-            <Radio value="low_confidence">Low confidence in current diagnosis</Radio>
-            <Radio value="missing_findings">Important findings not detected</Radio>
-            <Radio value="incorrect_interpretation">Incorrect interpretation of ECG</Radio>
-            <Radio value="additional_context">Additional clinical context needed</Radio>
-            <Radio value="other">Other (specify in comments)</Radio>
-          </Space>
-        </Radio.Group>
-      </Form.Item>
-      
-      <Text type="secondary">
-        Your feedback will be used to improve the AI analysis for this ECG.
-      </Text>
     </Card>
   );
 
@@ -297,26 +224,21 @@ const DoctorFeedbackInterface = ({
         <Alert
           message={
             <Space>
-              {feedback.action === 'approve' ? (
+              {feedback.approved ? (
                 <>
                   <CheckOutlined style={{ color: '#52c41a' }} />
                   <Text strong>AI Diagnosis Approved</Text>
                 </>
-              ) : feedback.action === 'correct' ? (
+              ) : (
                 <>
                   <CloseOutlined style={{ color: '#ff4d4f' }} />
                   <Text strong>Correction Submitted</Text>
                 </>
-              ) : feedback.action === 'reanalyze' ? (
-                <>
-                  <ReloadOutlined style={{ color: '#faad14' }} />
-                  <Text strong>Re-analysis Requested</Text>
-                </>
-              ) : null}
+              )}
             </Space>
           }
           description={`Submitted on ${new Date(feedback.timestamp).toLocaleString()}`}
-          type={feedback.action === 'approve' ? 'success' : feedback.action === 'reanalyze' ? 'warning' : 'error'}
+          type={feedback.approved ? 'success' : 'warning'}
           showIcon
           style={{ marginBottom: 16 }}
         />
@@ -325,82 +247,53 @@ const DoctorFeedbackInterface = ({
     return null;
   };
 
-  const renderSubmissionModal = () => {
-    const getModalContent = () => {
-      switch (pendingAction) {
-        case 'approve':
-          return {
-            title: 'Confirm Approval',
-            icon: <CheckCircleOutlined style={{ color: '#52c41a' }} />,
-            message: 'Are you sure you want to approve this AI diagnosis? This action will be recorded in the audit log.',
-            okText: 'Approve'
-          };
-        case 'correct':
-          return {
-            title: 'Confirm Correction',
-            icon: <CloseCircleOutlined style={{ color: '#ff4d4f' }} />,
-            message: 'Are you sure you want to submit a correction? Please ensure you have provided detailed comments.',
-            okText: 'Submit Correction'
-          };
-        case 'reanalyze':
-          return {
-            title: 'Confirm Re-analysis Request',
-            icon: <ReloadOutlined style={{ color: '#faad14' }} />,
-            message: 'Are you sure you want to request a new AI analysis? This will send the ECG back for re-analysis with your feedback.',
-            okText: 'Request Re-analysis'
-          };
-        default:
-          return {};
+  const renderSubmissionModal = () => (
+    <Modal
+      title={
+        <Space>
+          {pendingAction === 'approve' ? (
+            <>
+              <CheckCircleOutlined style={{ color: '#52c41a' }} />
+              <span>Confirm Approval</span>
+            </>
+          ) : (
+            <>
+              <CloseCircleOutlined style={{ color: '#ff4d4f' }} />
+              <span>Confirm Correction</span>
+            </>
+          )}
+        </Space>
       }
-    };
-
-    const modalContent = getModalContent();
-
-    return (
-      <Modal
-        title={
-          <Space>
-            {modalContent.icon}
-            <span>{modalContent.title}</span>
-          </Space>
-        }
-        open={showConfirmModal}
-        onOk={handleConfirmAction}
-        onCancel={() => {
-          setShowConfirmModal(false);
-          setPendingAction(null);
-          setReanalysisReason('');
-        }}
-        confirmLoading={isSubmitting}
-        okText={modalContent.okText}
-        cancelText="Cancel"
-      >
-        <div style={{ padding: '16px 0' }}>
-          <Text>{modalContent.message}</Text>
-          
-          {pendingAction === 'correct' && !feedback.comment.trim() && (
-            <Alert
-              message="Comment Required"
-              description="Please provide comments when correcting AI diagnosis"
-              type="warning"
-              showIcon
-              style={{ marginTop: 16 }}
-            />
-          )}
-          
-          {pendingAction === 'reanalyze' && !reanalysisReason && (
-            <Alert
-              message="Reason Required"
-              description="Please select a reason for requesting re-analysis"
-              type="warning"
-              showIcon
-              style={{ marginTop: 16 }}
-            />
-          )}
-        </div>
-      </Modal>
-    );
-  };
+      open={showConfirmModal}
+      onOk={handleConfirmAction}
+      onCancel={() => {
+        setShowConfirmModal(false);
+        setPendingAction(null);
+      }}
+      confirmLoading={isSubmitting}
+      okText={pendingAction === 'approve' ? 'Approve' : 'Submit Correction'}
+      cancelText="Cancel"
+    >
+      <div style={{ padding: '16px 0' }}>
+        <Text>
+          {pendingAction === 'approve' 
+            ? 'Are you sure you want to approve this AI diagnosis? This action will be recorded in the audit log.'
+            : 'Are you sure you want to submit a correction? Please ensure you have provided detailed comments.'
+          }
+        </Text>
+        
+        {pendingAction === 'correct' && !feedback.comment.trim() && (
+          <Alert
+            message="Comment Required"
+            description="Please provide comments when correcting AI diagnosis"
+            type="warning"
+            showIcon
+            style={{ marginTop: 16 }}
+          />
+        )}
+      </div>
+    </Modal>
+  );
 
   return (
     <div style={{ padding: 16 }}>
@@ -414,21 +307,13 @@ const DoctorFeedbackInterface = ({
       
       {renderCommentSection()}
       
-      {pendingAction === 'reanalyze' && renderReanalysisSection()}
-      
       {/* Visual Indicators */}
       <Card title="📊 Feedback Summary" style={{ marginBottom: 16 }}>
         <Space direction="vertical" style={{ width: '100%' }}>
           <div>
             <Text strong>Status: </Text>
-            <Tag color={
-              feedback.action === null ? 'default' : 
-              feedback.action === 'approve' ? 'success' : 
-              feedback.action === 'reanalyze' ? 'warning' : 'error'
-            }>
-              {feedback.action === null ? 'Pending' : 
-               feedback.action === 'approve' ? 'Approved' : 
-               feedback.action === 'reanalyze' ? 'Re-analysis Requested' : 'Corrected'}
+            <Tag color={feedback.approved === null ? 'default' : feedback.approved ? 'success' : 'error'}>
+              {feedback.approved === null ? 'Pending' : feedback.approved ? 'Approved' : 'Corrected'}
             </Tag>
           </div>
           
@@ -446,13 +331,6 @@ const DoctorFeedbackInterface = ({
             <div>
               <Text strong>Comments: </Text>
               <Text type="secondary">{feedback.comment}</Text>
-            </div>
-          )}
-          
-          {feedback.action === 'reanalyze' && reanalysisReason && (
-            <div>
-              <Text strong>Re-analysis Reason: </Text>
-              <Text type="secondary">{reanalysisReason}</Text>
             </div>
           )}
         </Space>
