@@ -78,21 +78,22 @@ const AuditLogs = () => {
         response.items.forEach(user => {
           if (user.id && user.username) {
             userMap[user.id] = {
-              username: user.username,
+              username: user.username, // This is the actual username they use to login
               email: user.email || '',
               role: user.role || 'user'
             };
+            console.log(`✅ Mapped user: ${user.id.slice(-8)} → ${user.username} (${user.role})`);
           }
         });
         
-        // Add manual mappings for known user IDs
+        // Add manual mappings for any missing users
         const manualMappings = getManualUserMappings();
         Object.assign(userMap, manualMappings);
         
         setUsers(userMap);
         console.log('User map created with', Object.keys(userMap).length, 'users');
         console.log('User map sample:', Object.keys(userMap).slice(0, 3).map(id => ({ id, ...userMap[id] })));
-        message.success(`Loaded ${Object.keys(userMap).length} users`);
+        message.success(`Loaded ${Object.keys(userMap).length} users with their actual usernames`);
       } else {
         console.log('No users found or invalid response format');
         console.log('Response structure:', response);
@@ -117,25 +118,24 @@ const AuditLogs = () => {
   // Function to manually map known user IDs to usernames
   const getManualUserMappings = () => {
     return {
-      // Map the specific user ID you mentioned
-      '688749ee32c624e0251cc83d': {
-        username: 'admin_user',
-        email: 'admin@example.com',
-        role: 'admin'
-      },
-      // Add more mappings here as you discover them
-      // 'another_user_id_here': {
-      //   username: 'another_username',
-      //   email: 'another@example.com',
-      //   role: 'doctor'
+      // Add any user IDs that might not be in the main user database
+      // These are fallback mappings for special cases
+      
+      // Example: If you have a system user or special admin account
+      // 'system_user_id': {
+      //   username: 'system_admin',
+      //   email: 'system@example.com',
+      //   role: 'admin'
       // }
     };
   };
 
   // Quick function to map the specific user ID you mentioned
   const mapSpecificUser = () => {
-    // You can change these values to match the actual user
-    addUserMapping('688749ee32c624e0251cc83d', 'admin_user', 'admin@example.com', 'admin');
+    // This function is now mainly for testing or special cases
+    // Most users will be automatically mapped from the database
+    message.info('Most users are automatically mapped from the database. Check console for details.');
+    console.log('Current user mappings:', users);
   };
 
   // Function to add a new user mapping
@@ -186,6 +186,43 @@ const AuditLogs = () => {
       return;
     }
     addUserMapping(userId, username, email, role);
+  };
+
+  // Function to help you add mappings for actual usernames from registration
+  const addActualUserMapping = (userId, actualUsername, actualEmail = '', actualRole = 'user') => {
+    if (!userId || !actualUsername) {
+      message.error('User ID and actual username are required');
+      return;
+    }
+    
+    // Validate that the username looks like a real username (not an ID)
+    if (actualUsername.length > 20 || actualUsername.includes('_') || actualUsername.includes('-')) {
+      message.warning('Username seems long or contains special characters. Is this the actual username from registration?');
+    }
+    
+    addUserMapping(userId, actualUsername, actualEmail, actualRole);
+    console.log(`✅ Mapped ${userId.slice(-8)} → ${actualUsername} (from registration)`);
+  };
+
+  // Function to show instructions for adding actual usernames
+  const showUsernameMappingInstructions = () => {
+    console.log('=== USERNAME MAPPING SYSTEM ===');
+    console.log('✅ AUTOMATIC: Usernames are automatically fetched from your user database');
+    console.log('✅ REAL USERNAMES: Shows the actual usernames that doctors/admins use to login');
+    console.log('✅ NO MANUAL WORK: No need to manually map user IDs to usernames');
+    console.log('');
+    console.log('How it works:');
+    console.log('1. System fetches all users from /api/users');
+    console.log('2. Maps user IDs to their actual login usernames');
+    console.log('3. Audit logs show real usernames instead of long IDs');
+    console.log('');
+    console.log('Example:');
+    console.log('   User ID: 688749ee32c624e0251cc83d');
+    console.log('   Shows as: john_doe (if that\'s their login username)');
+    console.log('');
+    console.log('Current user mappings:', users);
+    
+    message.success('Usernames are automatically mapped from your user database!');
   };
 
   const fetchAuditLogs = async () => {
@@ -424,9 +461,22 @@ const AuditLogs = () => {
                     {getUniqueUserIds().filter(userId => !users[userId]).length > 5 && (
                       <Text type="secondary">... and {getUniqueUserIds().filter(userId => !users[userId]).length - 5} more</Text>
                     )}
+                    {getUniqueUserIds().filter(userId => !users[userId]).length === 0 && (
+                      <Text type="success">✅ All user IDs are mapped to real usernames!</Text>
+                    )}
                   </div>
                 </div>
               )}
+              
+              {/* Show automatic mapping status */}
+              <div style={{ marginTop: 10 }}>
+                <Text strong>Username Mapping:</Text>
+                <div style={{ marginTop: 5 }}>
+                  <Text type="success">✅ Automatic mapping from user database</Text>
+                  <br />
+                  <Text type="secondary">Shows actual login usernames instead of user IDs</Text>
+                </div>
+              </div>
             </div>
           }
           type="info"
@@ -451,6 +501,9 @@ const AuditLogs = () => {
           </Button>
           <Button onClick={showUnmappedUsers}>
             Show Unmapped Users
+          </Button>
+          <Button onClick={showUsernameMappingInstructions}>
+            Show Username Mapping Instructions
           </Button>
           <Text>Total: {auditLogs.length} logs</Text>
           <Text>Users: {Object.keys(users).length}</Text>
