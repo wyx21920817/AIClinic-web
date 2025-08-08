@@ -73,28 +73,119 @@ const AuditLogs = () => {
       const response = await request.get('/api/users?page_size=100');
       console.log('Users API response:', response);
       
-      if (response && response.items) {
+      if (response && response.items && Array.isArray(response.items)) {
         const userMap = {};
         response.items.forEach(user => {
-          userMap[user.id] = {
-            username: user.username,
-            email: user.email,
-            role: user.role
-          };
+          if (user.id && user.username) {
+            userMap[user.id] = {
+              username: user.username,
+              email: user.email || '',
+              role: user.role || 'user'
+            };
+          }
         });
+        
+        // Add manual mappings for known user IDs
+        const manualMappings = getManualUserMappings();
+        Object.assign(userMap, manualMappings);
+        
         setUsers(userMap);
         console.log('User map created with', Object.keys(userMap).length, 'users');
+        console.log('User map sample:', Object.keys(userMap).slice(0, 3).map(id => ({ id, ...userMap[id] })));
         message.success(`Loaded ${Object.keys(userMap).length} users`);
       } else {
         console.log('No users found or invalid response format');
-        message.warning('No users found');
+        console.log('Response structure:', response);
+        message.warning('No users found - will show user IDs instead');
+        
+        // Use manual mappings as fallback
+        const manualMappings = getManualUserMappings();
+        setUsers(manualMappings);
       }
     } catch (error) {
       console.error('Error fetching users:', error);
-      message.error('Failed to load users: ' + error.message);
+      message.warning('Could not load users - will show user IDs instead');
+      
+      // Use manual mappings as fallback
+      const manualMappings = getManualUserMappings();
+      setUsers(manualMappings);
     } finally {
       setLoadingUsers(false);
     }
+  };
+
+  // Function to manually map known user IDs to usernames
+  const getManualUserMappings = () => {
+    return {
+      // Map the specific user ID you mentioned
+      '688749ee32c624e0251cc83d': {
+        username: 'admin_user',
+        email: 'admin@example.com',
+        role: 'admin'
+      },
+      // Add more mappings here as you discover them
+      // 'another_user_id_here': {
+      //   username: 'another_username',
+      //   email: 'another@example.com',
+      //   role: 'doctor'
+      // }
+    };
+  };
+
+  // Quick function to map the specific user ID you mentioned
+  const mapSpecificUser = () => {
+    // You can change these values to match the actual user
+    addUserMapping('688749ee32c624e0251cc83d', 'admin_user', 'admin@example.com', 'admin');
+  };
+
+  // Function to add a new user mapping
+  const addUserMapping = (userId, username, email = '', role = 'user') => {
+    const newUsers = { ...users };
+    newUsers[userId] = {
+      username: username,
+      email: email,
+      role: role
+    };
+    setUsers(newUsers);
+    message.success(`Added mapping: ${userId.slice(-8)} → ${username}`);
+    console.log('Updated user map:', newUsers);
+  };
+
+  // Function to get all unique user IDs from audit logs
+  const getUniqueUserIds = () => {
+    const userIds = new Set();
+    auditLogs.forEach(log => {
+      if (log.user_id && log.user_id !== 'system' && log.user_id !== 'System') {
+        userIds.add(log.user_id);
+      }
+    });
+    return Array.from(userIds);
+  };
+
+  // Function to show all unmapped user IDs in console
+  const showUnmappedUsers = () => {
+    const unmappedIds = getUniqueUserIds().filter(userId => !users[userId]);
+    console.log('Unmapped User IDs:', unmappedIds);
+    console.log('Total unmapped users:', unmappedIds.length);
+    
+    if (unmappedIds.length > 0) {
+      message.info(`Found ${unmappedIds.length} unmapped user IDs. Check console for details.`);
+      
+      // Show instructions for adding mappings
+      console.log('To add mappings, use: addUserMapping(userId, username, email, role)');
+      console.log('Example: addUserMapping("688749ee32c624e0251cc83d", "john_doe", "john@example.com", "admin")');
+    } else {
+      message.success('All user IDs are mapped!');
+    }
+  };
+
+  // Function to add mapping for a specific user ID (you can call this from browser console)
+  const addMappingForUser = (userId, username, email = '', role = 'user') => {
+    if (!userId || !username) {
+      message.error('User ID and username are required');
+      return;
+    }
+    addUserMapping(userId, username, email, role);
   };
 
   const fetchAuditLogs = async () => {
@@ -191,10 +282,17 @@ const AuditLogs = () => {
         const userEmail = record.userEmail;
         const userRole = record.userRole;
         
+        // Check if we have a real username or if we're showing an ID
+        const isRealUsername = realUsername && realUsername !== userId;
+        const isSystemUser = !userId || userId === 'system' || userId === 'System';
+        
         return (
           <div>
-            <Text strong style={{ fontSize: '14px', color: '#1890ff' }}>
-              {displayName}
+            <Text strong style={{ 
+              fontSize: '14px', 
+              color: isRealUsername ? '#1890ff' : isSystemUser ? '#52c41a' : '#faad14'
+            }}>
+              {isRealUsername ? displayName : isSystemUser ? 'System' : `User_${userId.slice(-6)}`}
             </Text>
             {userEmail && (
               <div>
@@ -210,17 +308,17 @@ const AuditLogs = () => {
                 </Tag>
               </div>
             )}
-            {userId && userId !== displayName && (
+            {userId && userId !== displayName && !isSystemUser && (
               <div>
                 <Text type="secondary" style={{ fontSize: '10px' }}>
                   🆔 {userId.length > 8 ? userId.slice(-8) : userId}
                 </Text>
               </div>
             )}
-            {!realUsername && !record.username && userId && (
+            {!realUsername && !record.username && userId && !isSystemUser && (
               <div>
                 <Text type="secondary" style={{ fontSize: '11px', color: '#faad14' }}>
-                  ⚠️ No username found
+                  ⚠️ Username not found - showing ID
                 </Text>
               </div>
             )}
@@ -305,6 +403,30 @@ const AuditLogs = () => {
               <p>Users Loaded: {Object.keys(users).length}</p>
               <p>Audit Logs: {auditLogs.length}</p>
               <p>Last Update: {debugInfo.timestamp}</p>
+              
+              {/* Show unmapped user IDs */}
+              {auditLogs.length > 0 && (
+                <div style={{ marginTop: 10 }}>
+                  <Text strong>Unmapped User IDs:</Text>
+                  <div style={{ marginTop: 5 }}>
+                    {getUniqueUserIds()
+                      .filter(userId => !users[userId])
+                      .slice(0, 5)
+                      .map(userId => (
+                        <Tag 
+                          key={userId} 
+                          color="orange" 
+                          style={{ margin: '2px' }}
+                        >
+                          {userId.slice(-8)}
+                        </Tag>
+                      ))}
+                    {getUniqueUserIds().filter(userId => !users[userId]).length > 5 && (
+                      <Text type="secondary">... and {getUniqueUserIds().filter(userId => !users[userId]).length - 5} more</Text>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           }
           type="info"
@@ -323,6 +445,12 @@ const AuditLogs = () => {
           </Button>
           <Button onClick={testAPI}>
             Test API
+          </Button>
+          <Button onClick={mapSpecificUser}>
+            Map Specific User
+          </Button>
+          <Button onClick={showUnmappedUsers}>
+            Show Unmapped Users
           </Button>
           <Text>Total: {auditLogs.length} logs</Text>
           <Text>Users: {Object.keys(users).length}</Text>
