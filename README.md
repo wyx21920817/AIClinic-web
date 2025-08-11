@@ -122,6 +122,33 @@ The AIClinic Web application can be containerized using Docker, providing a cons
 
    The application will be available at `http://localhost`
 
+### Publishing the Docker Image
+
+To publish your Docker image to Docker Hub:
+
+1. **Create a Docker Hub account**
+   - Register at [Docker Hub](https://hub.docker.com/) if you don't have an account
+
+2. **Login to Docker Hub**
+   ```bash
+   docker login
+   # Enter your Docker Hub username and password when prompted
+   ```
+
+3. **Tag your image**
+   ```bash
+   docker tag aiclinic-web YOUR_USERNAME/aiclinic-web:latest
+   # Replace YOUR_USERNAME with your Docker Hub username
+   ```
+
+4. **Push the image to Docker Hub**
+   ```bash
+   docker push YOUR_USERNAME/aiclinic-web:latest
+   ```
+
+5. **Verify the upload**
+   - Visit your Docker Hub repository to confirm the image was uploaded
+
 ### Docker Configuration Files
 
 - **Dockerfile**: Defines how to build the Docker image for the application
@@ -143,6 +170,11 @@ The AIClinic Web application can be containerized using Docker, providing a cons
 
 - **Token Issues**: If you encounter API authentication problems when running in a container, try logging in again in the containerized version of the application to obtain a new token
 - **Network Issues**: If running on Linux, you can try using the `network_mode: "host"` configuration
+- **Docker Hub Push Errors**: If you see errors like `push access denied, repository does not exist or may require authorization`, try these solutions:
+  - Ensure you're logged in with `docker login`
+  - Verify your username is correct in the tag command
+  - Create the repository on Docker Hub website first
+  - Check your account permissions and email verification status
 
 ## License
 
