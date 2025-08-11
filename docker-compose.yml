@@ -1,0 +1,9 @@
+version: '3'
+
+services:
+  aiclinic-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    network_mode: "host"
+    restart: unless-stopped
