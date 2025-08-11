@@ -90,6 +90,60 @@ The application will be available at `http://localhost:3000`
 4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
+## Docker Deployment
+
+The AIClinic Web application can be containerized using Docker, providing a consistent runtime environment.
+
+### Prerequisites
+
+- Install [Docker](https://www.docker.com/get-started)
+- Install [Docker Compose](https://docs.docker.com/compose/install/) (optional, for simplified container management)
+
+### Building and Running with Docker
+
+1. **Build the Docker image**
+
+   ```bash
+   # Run in the project root directory
+   docker build -t aiclinic-web .
+   ```
+
+2. **Run the Docker container**
+
+   ```bash
+   # Basic run command
+   docker run -p 80:80 aiclinic-web
+   
+   # Or using Docker Compose
+   docker-compose up -d
+   ```
+
+3. **Access the application**
+
+   The application will be available at `http://localhost`
+
+### Docker Configuration Files
+
+- **Dockerfile**: Defines how to build the Docker image for the application
+  - Uses nginx:stable-alpine as the base image
+  - Copies the React build output to Nginx's web root directory
+  - Uses custom nginx configuration to support React routing
+
+- **docker-compose.yml**: Simplifies building and running the container
+  - Defines service name and build context
+  - Configures port mapping or network mode
+  - Sets container restart policy
+
+- **nginx.conf**: Custom Nginx configuration
+  - Configures static file serving
+  - Handles React routing
+  - Enables gzip compression
+
+### Troubleshooting
+
+- **Token Issues**: If you encounter API authentication problems when running in a container, try logging in again in the containerized version of the application to obtain a new token
+- **Network Issues**: If running on Linux, you can try using the `network_mode: "host"` configuration
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
