@@ -152,7 +152,7 @@ const PatientList = () => {
 
   useEffect(() => {
     fetchPatients();
-  }, []);
+  }, [searchSource]);
 
   // Handle pagination change
   const handlePageChange = (page, pageSize) => {
@@ -163,7 +163,6 @@ const PatientList = () => {
   const handleSearchSourceChange = (value) => {
     setSearchSource(value);
     setSearchText('');
-    fetchPatients();
   };
 
   // MOCK data demonstration (can be removed if backend data is needed)
@@ -245,19 +244,13 @@ const PatientList = () => {
           <Space>
             <Button
               type={searchSource === 'local' ? 'primary' : 'default'}
-              onClick={() => {
-                setSearchSource('local');
-                fetchPatients();
-              }}
+              onClick={() => handleSearchSourceChange('local')}
             >
               Search Local Database
             </Button>
             <Button
               type={searchSource === 'orthanc' ? 'primary' : 'default'}
-              onClick={() => {
-                setSearchSource('orthanc');
-                fetchPatients();
-              }}
+              onClick={() => handleSearchSourceChange('orthanc')}
             >
               Search Orthanc Server
             </Button>
