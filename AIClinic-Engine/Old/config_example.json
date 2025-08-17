@@ -1,0 +1,30 @@
+{
+  "rhythms": ["AF", "ST", "LBBB", "RBBB", "1DAVB"],
+  "configs": {
+    "AF": {
+      "filename": "16731_hr",
+      "lead_index": 1,
+      "db_dir": null
+    },
+    "ST": {
+      "filename": "04408_hr",
+      "lead_index": 1,
+      "db_dir": null
+    },
+    "LBBB": {
+      "filename": "03016_hr",
+      "lead_index": 1,
+      "db_dir": null
+    },
+    "RBBB": {
+      "filename": "03041_hr",
+      "lead_index": 1,
+      "db_dir": null
+    },
+    "1DAVB": {
+      "filename": "01484_hr",
+      "lead_index": 1,
+      "db_dir": null
+    }
+  }
+} 
