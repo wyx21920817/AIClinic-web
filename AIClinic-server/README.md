@@ -1,2 +1,0 @@
-# AIClinic-server
-AIClinic-server

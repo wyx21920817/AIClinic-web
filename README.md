@@ -112,7 +112,7 @@ The AIClinic Web application can be containerized using Docker, providing a cons
 
    ```bash
    # Basic run command
-   docker run -p 80:80 aiclinic-web
+   docker run -d -p 80:80 aiclinic-web
    
    # Or using Docker Compose
    docker-compose up -d
