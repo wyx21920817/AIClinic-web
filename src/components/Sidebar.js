@@ -1,6 +1,6 @@
 import React from 'react';
 import { Menu } from 'antd';
-import { DashboardOutlined, TeamOutlined, UserOutlined, ExperimentOutlined, FileTextOutlined, SecurityScanOutlined } from '@ant-design/icons';
+import { DashboardOutlined, TeamOutlined, UserOutlined, ExperimentOutlined, FileTextOutlined, SecurityScanOutlined, HeartOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 
 const Sidebar = () => {
@@ -52,6 +52,18 @@ const Sidebar = () => {
       icon: <ExperimentOutlined />,
       label: 'XAI Demo',
       onClick: () => navigate('/xai-demo'),
+    },
+    {
+      key: '/ecg-ai-demo',
+      icon: <HeartOutlined />,
+      label: 'ECG AI Results Demo',
+      onClick: () => navigate('/ecg-ai-demo'),
+    },
+    {
+      key: '/role-test',
+      icon: <UserOutlined />,
+      label: 'Role Test',
+      onClick: () => navigate('/role-test'),
     },
     {
       key: '/account',

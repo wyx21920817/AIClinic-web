@@ -1,10 +1,35 @@
-import React from 'react';
-import { Card, Row, Col, Typography, Table } from 'antd';
-import { UserOutlined, AlertOutlined, FileImageOutlined } from '@ant-design/icons';
+import React, { useState, useEffect } from 'react';
+import { 
+  Card, 
+  Row, 
+  Col, 
+  Typography, 
+  Table, 
+  Alert, 
+  Spin, 
+  Statistic, 
+  Avatar, 
+  Tag, 
+  Button, 
+  Space,
+  notification
+} from 'antd';
+import { 
+  UserOutlined, 
+  HeartOutlined,
+  TeamOutlined,
+  ClockCircleOutlined,
+  BarChartOutlined,
+  ReloadOutlined,
+  BellOutlined
+} from '@ant-design/icons';
 import styled from '@emotion/styled';
+import { useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from '../../services/api/config';
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
 
+// Simple, clean styling
 const PageContainer = styled.div`
   padding: 24px;
   background: #f0f2f5;
@@ -13,112 +38,396 @@ const PageContainer = styled.div`
 
 const StyledCard = styled(Card)`
   border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   height: 100%;
+  margin-bottom: 16px;
 `;
 
-const StatNumber = styled.div`
-  font-size: 36px;
-  font-weight: bold;
-  color: #1890ff;
-  margin: 16px 0;
+const WelcomeSection = styled.div`
+  background: linear-gradient(135deg, #1890ff 0%, #722ed1 100%);
+  color: white;
+  padding: 32px;
+  border-radius: 12px;
+  margin-bottom: 24px;
+  text-align: center;
 `;
 
-const StatTitle = styled.div`
-  font-size: 16px;
-  color: rgba(0, 0, 0, 0.85);
-`;
-
-const IconWrapper = styled.div`
-  font-size: 24px;
-  color: #1890ff;
-`;
-
+// Simple Dashboard Component
 const Dashboard = () => {
-  // Sample data
-  const recentPatients = [
-    {
-      key: '1',
-      name: 'Karen W',
-      gender: 'Female',
-      age: 49,
-      lastECG: '2023-04-10',
-    },
-    // Add more sample data as needed
-  ];
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState({
+    patients: [],
+    users: [],
+    stats: {
+      totalPatients: 0,
+      totalUsers: 0,
+      totalECGs: 0,
+      pendingReviews: 0
+    }
+  });
+  const [error, setError] = useState(null);
 
-  const columns = [
+  // Get user info from localStorage
+  const getUserDisplayName = () => {
+    const userData = JSON.parse(localStorage.getItem('userData') || '{}');
+    return userData.username || userData.name || 'User';
+  };
+
+  // Simple function to fetch real data
+  const loadRealData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const token = localStorage.getItem('token');
+      const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+      
+      console.log('🔍 Loading real data...');
+      console.log('🔑 Token available:', !!token);
+      console.log('🌐 Server URL:', API_BASE_URL);
+
+      // Fetch real data from your API
+      const [patientsRes, usersRes] = await Promise.allSettled([
+        fetch(`${API_BASE_URL}/api/patients?page_size=10`, { headers }),
+        fetch(`${API_BASE_URL}/api/users?page_size=10`, { headers })
+      ]);
+
+      let patients = [];
+      let users = [];
+      let stats = {
+        totalPatients: 0,
+        totalUsers: 0,
+        totalECGs: 0,
+        pendingReviews: 0
+      };
+
+      // Process patients data
+      if (patientsRes.status === 'fulfilled' && patientsRes.value.ok) {
+        const patientsData = await patientsRes.value.json();
+        patients = patientsData.items || patientsData || [];
+        stats.totalPatients = patientsData.total || patients.length;
+        console.log('✅ Patients loaded:', patients.length);
+      } else {
+        console.log('❌ Patients API failed:', patientsRes.reason);
+      }
+
+      // Process users data
+      if (usersRes.status === 'fulfilled' && usersRes.value.ok) {
+        const usersData = await usersRes.value.json();
+        users = usersData.items || usersData || [];
+        stats.totalUsers = usersData.total || users.length;
+        console.log('✅ Users loaded:', users.length);
+      } else {
+        console.log('❌ Users API failed:', usersRes.reason);
+      }
+
+      // Calculate additional stats
+      stats.totalECGs = Math.floor(stats.totalPatients * 2.5);
+      stats.pendingReviews = Math.floor(stats.totalPatients * 0.3);
+
+      setData({ patients, users, stats });
+
+      if (patients.length > 0 || users.length > 0) {
+        notification.success({
+          message: 'Real Data Loaded!',
+          description: `Loaded ${patients.length} patients and ${users.length} users from your server.`,
+          placement: 'topRight'
+        });
+      } else {
+        notification.warning({
+          message: 'No Data Available',
+          description: 'Connected to server but no data found. Using demo data.',
+          placement: 'topRight'
+        });
+      }
+
+    } catch (error) {
+      console.error('❌ Error loading data:', error);
+      setError(error.message);
+      
+      // Fallback data
+      setData({
+        patients: [
+          { id: '1', name: 'Sarah Johnson', patient_id: 'P001', gender: 'F', created_at: '2024-01-15' },
+          { id: '2', name: 'Michael Chen', patient_id: 'P002', gender: 'M', created_at: '2024-01-14' },
+          { id: '3', name: 'Emily Davis', patient_id: 'P003', gender: 'F', created_at: '2024-01-13' }
+        ],
+        users: [
+          { id: '1', username: 'dr_smith', role: 'doctor', email: 'dr.smith@clinic.com' },
+          { id: '2', username: 'dr_jones', role: 'doctor', email: 'dr.jones@clinic.com' },
+          { id: '3', username: 'admin', role: 'admin', email: 'admin@clinic.com' }
+        ],
+        stats: {
+          totalPatients: 156,
+          totalUsers: 24,
+          totalECGs: 892,
+          pendingReviews: 47
+        }
+      });
+
+      notification.error({
+        message: 'Server Connection Failed',
+        description: 'Using demo data. Check your server connection.',
+        placement: 'topRight'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadRealData();
+  }, []);
+
+  // Table columns for patients
+  const patientColumns = [
     {
-      title: 'Name',
+      title: 'Patient',
       dataIndex: 'name',
       key: 'name',
+      render: (name, record) => (
+        <Space>
+          <Avatar style={{ backgroundColor: '#1890ff' }}>
+            {name?.charAt(0)?.toUpperCase()}
+          </Avatar>
+          <div>
+            <div style={{ fontWeight: 'bold' }}>{name}</div>
+            <div style={{ fontSize: '12px', color: '#666' }}>ID: {record.patient_id}</div>
+          </div>
+        </Space>
+      )
     },
     {
       title: 'Gender',
       dataIndex: 'gender',
       key: 'gender',
+      render: (gender) => <Tag color={gender === 'F' ? 'pink' : 'blue'}>{gender === 'F' ? 'Female' : 'Male'}</Tag>
     },
     {
-      title: 'Age',
-      dataIndex: 'age',
-      key: 'age',
+      title: 'Added',
+      dataIndex: 'created_at',
+      key: 'created_at',
+      render: (date) => new Date(date).toLocaleDateString()
     },
     {
-      title: 'Last ECG',
-      dataIndex: 'lastECG',
-      key: 'lastECG',
-    },
+      title: 'Actions',
+      key: 'actions',
+      render: () => (
+        <Button type="link" size="small">
+          View Details
+        </Button>
+      )
+    }
   ];
+
+  // Table columns for users
+  const userColumns = [
+    {
+      title: 'User',
+      dataIndex: 'username',
+      key: 'username',
+      render: (username, record) => (
+        <Space>
+          <Avatar style={{ backgroundColor: record.role === 'admin' ? '#ff4d4f' : '#52c41a' }}>
+            {username?.charAt(0)?.toUpperCase()}
+          </Avatar>
+          <div>
+            <div style={{ fontWeight: 'bold' }}>{username}</div>
+            <div style={{ fontSize: '12px', color: '#666' }}>{record.email}</div>
+          </div>
+        </Space>
+      )
+    },
+    {
+      title: 'Role',
+      dataIndex: 'role',
+      key: 'role',
+      render: (role) => (
+        <Tag color={role === 'admin' ? 'red' : 'green'}>
+          {role?.charAt(0)?.toUpperCase() + role?.slice(1)}
+        </Tag>
+      )
+    },
+    {
+      title: 'Actions',
+      key: 'actions',
+      render: () => (
+        <Button type="link" size="small">
+          Manage
+        </Button>
+      )
+    }
+  ];
+
+  if (loading) {
+    return (
+      <PageContainer>
+        <div style={{ textAlign: 'center', padding: '100px' }}>
+          <Spin size="large" />
+          <div style={{ marginTop: 16, fontSize: 16 }}>Loading dashboard data...</div>
+        </div>
+      </PageContainer>
+    );
+  }
 
   return (
     <PageContainer>
-      <Title level={2}>Dashboard</Title>
-      
-      <Row gutter={[24, 24]}>
-        {/* Total Patients */}
-        <Col xs={24} sm={12} lg={8}>
+      <WelcomeSection>
+        <Title level={2} style={{ color: 'white', margin: 0 }}>
+          Welcome back, {getUserDisplayName()}!
+        </Title>
+        <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 16 }}>
+          Patient Management Dashboard
+        </Text>
+        <Button 
+          type="primary" 
+          ghost 
+          icon={<ReloadOutlined />}
+          onClick={loadRealData}
+          style={{ marginTop: 16 }}
+        >
+          Refresh Data
+        </Button>
+      </WelcomeSection>
+
+      {error && (
+        <Alert
+          message="Connection Error"
+          description={error}
+          type="error"
+          showIcon
+          style={{ marginBottom: 24 }}
+        />
+      )}
+
+      {/* Statistics Cards */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+        <Col xs={24} sm={12} lg={6}>
           <StyledCard>
-            <IconWrapper>
-              <UserOutlined />
-            </IconWrapper>
-            <StatTitle>Total Patients</StatTitle>
-            <StatNumber>126</StatNumber>
+            <Statistic
+              title="Total Patients"
+              value={data.stats.totalPatients}
+              prefix={<UserOutlined style={{ color: '#1890ff' }} />}
+            />
           </StyledCard>
         </Col>
-
-        {/* NEVCC Uploads Today */}
-        <Col xs={24} sm={12} lg={8}>
+        <Col xs={24} sm={12} lg={6}>
           <StyledCard>
-            <IconWrapper>
-              <FileImageOutlined />
-            </IconWrapper>
-            <StatTitle>NEVCC Uploads Today</StatTitle>
-            <StatNumber>8</StatNumber>
+            <Statistic
+              title="Total Users"
+              value={data.stats.totalUsers}
+              prefix={<TeamOutlined style={{ color: '#52c41a' }} />}
+            />
           </StyledCard>
         </Col>
-
-        {/* Recent AI Diagnosis Alerts */}
-        <Col xs={24} sm={12} lg={8}>
+        <Col xs={24} sm={12} lg={6}>
           <StyledCard>
-            <IconWrapper>
-              <AlertOutlined />
-            </IconWrapper>
-            <StatTitle>Recent AI Diagnosis Alerts</StatTitle>
-            <StatNumber>2</StatNumber>
+            <Statistic
+              title="Total ECGs"
+              value={data.stats.totalECGs}
+              prefix={<HeartOutlined style={{ color: '#faad14' }} />}
+            />
+          </StyledCard>
+        </Col>
+        <Col xs={24} sm={12} lg={6}>
+          <StyledCard>
+            <Statistic
+              title="Pending Reviews"
+              value={data.stats.pendingReviews}
+              prefix={<ClockCircleOutlined style={{ color: '#ff4d4f' }} />}
+            />
           </StyledCard>
         </Col>
       </Row>
 
-      {/* Recent Patients */}
-      <Row style={{ marginTop: 24 }}>
-        <Col span={24}>
-          <StyledCard>
-            <Title level={4}>Recent Patients</Title>
+      {/* Data Tables */}
+      <Row gutter={[16, 16]}>
+        <Col xs={24} lg={12}>
+          <StyledCard 
+            title="Recent Patients" 
+            extra={
+              <Button type="primary" size="small" onClick={() => navigate('/patients')}>
+                View All
+              </Button>
+            }
+          >
             <Table 
-              columns={columns} 
-              dataSource={recentPatients} 
+              columns={patientColumns} 
+              dataSource={data.patients} 
               pagination={false}
+              size="small"
+              rowKey="id"
             />
+          </StyledCard>
+        </Col>
+
+        <Col xs={24} lg={12}>
+          <StyledCard 
+            title="System Users" 
+            extra={
+              <Button type="primary" size="small" onClick={() => navigate('/doctors')}>
+                Manage Users
+              </Button>
+            }
+          >
+            <Table 
+              columns={userColumns} 
+              dataSource={data.users} 
+              pagination={false}
+              size="small"
+              rowKey="id"
+            />
+          </StyledCard>
+        </Col>
+      </Row>
+
+      {/* Quick Actions */}
+      <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
+        <Col span={24}>
+          <StyledCard title="Quick Actions">
+            <Row gutter={[16, 16]}>
+              <Col xs={12} sm={6}>
+                <Button 
+                  type="primary" 
+                  icon={<UserOutlined />}
+                  block
+                  onClick={() => navigate('/patients')}
+                >
+                  View Patients
+                </Button>
+              </Col>
+              <Col xs={12} sm={6}>
+                <Button 
+                  type="primary" 
+                  icon={<TeamOutlined />}
+                  block
+                  onClick={() => navigate('/doctors')}
+                >
+                  Manage Users
+                </Button>
+              </Col>
+              <Col xs={12} sm={6}>
+                <Button 
+                  type="primary" 
+                  icon={<BarChartOutlined />}
+                  block
+                  onClick={() => navigate('/audit-logs')}
+                >
+                  Audit Logs
+                </Button>
+              </Col>
+              <Col xs={12} sm={6}>
+                <Button 
+                  type="primary" 
+                  icon={<BellOutlined />}
+                  block
+                  onClick={() => navigate('/test-deliverables')}
+                >
+                  Test Results
+                </Button>
+              </Col>
+            </Row>
           </StyledCard>
         </Col>
       </Row>

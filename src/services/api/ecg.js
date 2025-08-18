@@ -198,29 +198,83 @@ export const pdfAPI = {
   }
 };
 
-// AI Diagnosis API Service
+// AI Diagnosis API Service - Connected to AIClinic Engine Server
 export const aiDiagnosisAPI = {
-  // Get AI diagnosis for ECG file
-  getDiagnosis: async (ecgFileId) => {
+  // Get AI diagnosis for ECG file from AIClinic engine
+  getDiagnosis: async (instanceId) => {
     try {
-      const response = await request.get(`${API_ENDPOINTS.AI_DIAGNOSIS}/${ecgFileId}`);
-      return response.data;
+      // Connect to AIClinic engine server
+      const response = await fetch(`http://localhost:8000/diagnose/${instanceId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('AI Diagnosis response:', data);
+      return data;
     } catch (error) {
       console.error('Error fetching AI diagnosis:', error);
       throw error;
     }
   },
 
-  // Request new AI diagnosis
-  requestDiagnosis: async (ecgFileId, options = {}) => {
+  // Request new AI diagnosis from AIClinic engine
+  requestDiagnosis: async (instanceId, options = {}) => {
     try {
-      const response = await request.post(`${API_ENDPOINTS.AI_DIAGNOSIS}/analyze`, {
-        ecgFileId,
-        ...options
+      console.log('Requesting AI diagnosis for instance:', instanceId);
+      
+      // Connect to AIClinic engine server
+      const response = await fetch(`http://localhost:8000/diagnose/${instanceId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
       });
-      return response.data;
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('AI Diagnosis request response:', data);
+      return data;
     } catch (error) {
       console.error('Error requesting AI diagnosis:', error);
+      throw error;
+    }
+  },
+
+  // Get XAI interpretation from AIClinic engine
+  getXAIInterpretation: async (instanceId, diseases = []) => {
+    try {
+      console.log('Requesting XAI interpretation for instance:', instanceId, 'diseases:', diseases);
+      
+      const formData = new FormData();
+      diseases.forEach(disease => {
+        formData.append('disease', disease);
+      });
+      
+      // Connect to AIClinic engine server for XAI
+      const response = await fetch(`http://localhost:8000/interprete/${instanceId}`, {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('XAI Interpretation response:', data);
+      return data;
+    } catch (error) {
+      console.error('Error fetching XAI interpretation:', error);
       throw error;
     }
   },

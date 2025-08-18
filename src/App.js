@@ -17,7 +17,10 @@ import TestDeliverables from './pages/TestDeliverables';
 import SimpleTest from './pages/SimpleTest';
 import AIEngineShowcase from './pages/AIEngineShowcase';
 import XAIDemo from './pages/XAIDemo';
-import AuditLogs from './pages/AuditLogs';
+import AuditLogsProfessional from './pages/AuditLogsProfessional';
+import AIECGResultsDemo from './pages/AIECGResultsDemo';
+import RoleTest from './pages/RoleTest';
+import APITest from './pages/APITest';
 // import OrthancPatientList from './pages/patients/OrthancPatientList';
 import './App.css';
 
@@ -44,11 +47,14 @@ function App() {
               <Route index element={<TestDeliverables />} />
             </Route>
             <Route path="audit-logs" element={<PrivateRoute allowedRoles={['admin']} />}>
-              <Route index element={<AuditLogs />} />
+              <Route index element={<AuditLogsProfessional />} />
             </Route>
+            <Route path="ecg-ai-demo" element={<AIECGResultsDemo />} />
             <Route path="simple-test" element={<SimpleTest />} />
             <Route path="ai-engine-showcase" element={<AIEngineShowcase />} />
             <Route path="xai-demo" element={<XAIDemo />} />
+            <Route path="role-test" element={<RoleTest />} />
+            <Route path="api-test" element={<APITest />} />
             <Route path="doctor-home" element={<PrivateRoute allowedRoles={['doctor']} />}> 
               <Route index element={<div>Doctor Home</div>} />
             </Route>
