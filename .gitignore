@@ -1,44 +1,56 @@
-# dependencies
-/node_modules
-/.pnp
-.pnp.js
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# testing
-/coverage
+# Production build
+build/
+dist/
 
-
-
-# misc
-.DS_Store
+# Environment variables
+.env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
-.env
 
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# IDE
-.idea/
+# IDE files
 .vscode/
+.idea/
 *.swp
 *.swo
 
-# Temporary files
-*.tmp
-*.temp
-.cache/
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 
-# Debug logs
-debug.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+# Logs
+logs
+*.log
 
-# Optional eslint cache
-.eslintcache
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+
+# nyc test coverage
+.nyc_output
+
+# Dependency directories
+jspm_packages/
+
+# Optional npm cache directory
+.npm
 
 # Optional REPL history
 .node_repl_history
@@ -49,33 +61,52 @@ yarn-error.log*
 # Yarn Integrity file
 .yarn-integrity
 
-# dotenv environment variable files
-.env
-.env.development.local
-.env.test.local
-.env.production.local
-.env.local
+# Server directories (should be separate repositories)
+AIClinic-server/
+AIClinic-Engine/
+AIClinic-webserver/
+AIClinic-web/
 
-# parcel-bundler cache (https://parceljs.org/)
-.cache
-.parcel-cache
+# Test files
+test-*.js
+test-*.py
 
-# Next.js build output
-.next
-out
+# Documentation files (keep only essential ones)
+*.md
+!README.md
+!ROLE_BASED_DASHBOARD_README.md
 
-# Nuxt.js build / generate output
-.nuxt
-dist
+# Docker files (if not needed for web project)
+Dockerfile
+docker-compose.yml
+nginx.conf
 
-# Gatsby files
-.cache/
+# Python files (if not needed for web project)
+*.py
+requirements.txt
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
 
+# Model files
+*.hdf5
+*.pth
+*.pkl
+*.npy
 
-# Mac files
-.DS_Store
+# Data files
+*.csv
+*.dat
+*.hea
+*.dcm
 
-# Windows files
-Thumbs.db
-ehthumbs.db
-Desktop.ini
+# Temporary files
+*.tmp
+*.temp
