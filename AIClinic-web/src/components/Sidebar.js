@@ -39,12 +39,6 @@ const Sidebar = () => {
             label: 'Audit Logs',
             onClick: () => navigate('/audit-logs'),
           },
-          {
-            key: '/audit-logs-professional',
-            icon: <SecurityScanOutlined />,
-            label: 'Professional Audit',
-            onClick: () => navigate('/audit-logs-professional'),
-          },
         ]
       : []),
     {

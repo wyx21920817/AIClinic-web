@@ -1,5 +1,5 @@
 import request from './request';
-import { API_ENDPOINTS } from './config';
+import { API_ENDPOINTS, API_BASE_URL } from './config';
 
 // Professional Audit API Service
 export const auditAPI = {
@@ -90,10 +90,23 @@ export const auditAPI = {
       if (params.end_date) queryParams.append('end_date', params.end_date);
       if (params.format) queryParams.append('format', params.format || 'csv');
 
-      const response = await request.get(`${API_ENDPOINTS.AUDIT}/export?${queryParams.toString()}`, {
-        responseType: 'blob',
+      // For blob responses, we need to use axios directly to get the full response
+      const token = localStorage.getItem('token');
+      const headers = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      };
+
+      const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.AUDIT}/export?${queryParams.toString()}`, {
+        method: 'GET',
+        headers: headers,
       });
-      return response.data || response;
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      return await response.blob();
     } catch (error) {
       console.error('Error exporting audit logs:', error);
       throw error;

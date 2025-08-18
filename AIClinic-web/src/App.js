@@ -17,7 +17,6 @@ import TestDeliverables from './pages/TestDeliverables';
 import SimpleTest from './pages/SimpleTest';
 import AIEngineShowcase from './pages/AIEngineShowcase';
 import XAIDemo from './pages/XAIDemo';
-import AuditLogs from './pages/AuditLogs';
 import AuditLogsProfessional from './pages/AuditLogsProfessional';
 // import OrthancPatientList from './pages/patients/OrthancPatientList';
 import './App.css';
@@ -45,9 +44,6 @@ function App() {
               <Route index element={<TestDeliverables />} />
             </Route>
             <Route path="audit-logs" element={<PrivateRoute allowedRoles={['admin']} />}>
-              <Route index element={<AuditLogs />} />
-            </Route>
-            <Route path="audit-logs-professional" element={<PrivateRoute allowedRoles={['admin']} />}>
               <Route index element={<AuditLogsProfessional />} />
             </Route>
             <Route path="simple-test" element={<SimpleTest />} />

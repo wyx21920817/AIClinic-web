@@ -49,6 +49,7 @@ import {
   SyncOutlined
 } from '@ant-design/icons';
 import { auditAPI, handleAuditAPIError } from '../services/api/audit';
+import { API_BASE_URL } from '../services/api/config';
 import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
@@ -107,14 +108,22 @@ const AuditLogsProfessional = () => {
     setError(null);
     
     try {
+      console.log('Loading all audit data...');
+      
+      // First fetch users, then audit logs (since logs depend on user data)
+      await fetchUsers();
+      await fetchAuditLogs();
+      
+      // Fetch additional data in parallel
       await Promise.all([
-        fetchUsers(),
-        fetchAuditLogs(),
         fetchAnalytics(),
         fetchSummary(),
         fetchSecurityAlerts()
       ]);
+      
+      console.log('All audit data loaded successfully');
     } catch (error) {
+      console.error('Error loading audit data:', error);
       const errorInfo = handleAuditAPIError(error);
       setError(errorInfo.message);
     } finally {
@@ -122,11 +131,18 @@ const AuditLogsProfessional = () => {
     }
   };
 
+  const refreshData = async () => {
+    console.log('Refreshing audit data...');
+    await loadAllData();
+    message.success('Audit logs refreshed successfully');
+  };
+
   const fetchUsers = async () => {
     try {
-      const response = await fetch('/api/users?page_size=100', {
+      const response = await fetch(`${API_BASE_URL}/api/users?page_size=100`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
         }
       });
       
@@ -145,6 +161,8 @@ const AuditLogsProfessional = () => {
           });
           setUsers(userMap);
         }
+      } else {
+        console.error('Failed to fetch users:', response.status, response.statusText);
       }
     } catch (error) {
       console.error('Error fetching users:', error);
@@ -153,11 +171,19 @@ const AuditLogsProfessional = () => {
 
   const fetchAuditLogs = async () => {
     try {
+      console.log('Fetching audit logs with params:', {
+        page: pagination.current,
+        page_size: pagination.pageSize,
+        ...filters
+      });
+      
       const response = await auditAPI.getAuditLogs({
         page: pagination.current,
         page_size: pagination.pageSize,
         ...filters
       });
+      
+      console.log('Audit logs response:', response);
       
       if (response && response.items) {
         // Enhance logs with user information
@@ -171,11 +197,28 @@ const AuditLogsProfessional = () => {
           };
         });
         
+        console.log('Enhanced audit logs:', enhancedLogs);
+        
+        // Debug: Check event data structure
+        if (enhancedLogs.length > 0) {
+          console.log('Sample audit log entry:', enhancedLogs[0]);
+          console.log('Available fields:', Object.keys(enhancedLogs[0]));
+          console.log('Event action field:', enhancedLogs[0].action);
+          console.log('Event category field:', enhancedLogs[0].category);
+          console.log('Event status field:', enhancedLogs[0].status);
+          console.log('Event risk_level field:', enhancedLogs[0].risk_level);
+        }
+        
         setAuditLogs(enhancedLogs);
-        setPagination(prev => ({ ...prev, total: response.pagination.total }));
+        setPagination(prev => ({ ...prev, total: response.pagination?.total || enhancedLogs.length }));
+      } else {
+        console.warn('No audit logs found or invalid response format:', response);
+        setAuditLogs([]);
+        setPagination(prev => ({ ...prev, total: 0 }));
       }
     } catch (error) {
       console.error('Error fetching audit logs:', error);
+      message.error('Failed to load audit logs. Please try again.');
       throw error;
     }
   };
@@ -224,9 +267,69 @@ const AuditLogsProfessional = () => {
 
   const exportLogs = async () => {
     try {
-      await auditAPI.exportAuditLogs({ format: 'csv' });
-      message.success('Audit logs exported successfully');
+      // Get all audit logs for export
+      const allLogs = await auditAPI.getAuditLogs({ 
+        page: 1, 
+        page_size: 1000 // Get a large number of logs
+      });
+      
+      if (!allLogs || !allLogs.items || allLogs.items.length === 0) {
+        message.warning('No audit logs to export');
+        return;
+      }
+      
+      // Create CSV content
+      const csvHeaders = [
+        'Timestamp', 'Event Type', 'User ID', 'Username', 'Action', 
+        'Resource Type', 'Resource ID', 'Status', 'Details', 'Category',
+        'Priority', 'Risk Level', 'Data Classification', 'IP Address',
+        'Session ID', 'Patient ID', 'Response Time', 'Error Code',
+        'Anomaly Detected', 'Business Unit', 'Regulatory Requirement'
+      ];
+      
+      const csvRows = allLogs.items.map(log => [
+        log.timestamp ? new Date(log.timestamp).toISOString() : '',
+        log.event_type || '',
+        log.user_id || '',
+        log.username || '',
+        log.action || '',
+        log.resource_type || '',
+        log.resource_id || '',
+        log.status || '',
+        log.details || '',
+        log.category || '',
+        log.priority || '',
+        log.risk_level || '',
+        log.data_classification || '',
+        log.ip_address || '',
+        log.session_id || '',
+        log.patient_id || '',
+        log.response_time || '',
+        log.error_code || '',
+        log.anomaly_detected ? 'Yes' : 'No',
+        log.business_unit || '',
+        log.regulatory_requirement || ''
+      ]);
+      
+      // Combine headers and rows
+      const csvContent = [csvHeaders, ...csvRows]
+        .map(row => row.map(field => `"${field}"`).join(','))
+        .join('\n');
+      
+      // Create blob and download
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `audit_logs_${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      message.success(`Exported ${allLogs.items.length} audit logs successfully`);
     } catch (error) {
+      console.error('Export error:', error);
       message.error('Failed to export audit logs');
     }
   };
@@ -238,165 +341,238 @@ const AuditLogsProfessional = () => {
 
   const columns = [
     {
-      title: 'Timestamp',
+      title: '🕒 Timestamp',
       dataIndex: 'timestamp',
       key: 'timestamp',
-      width: 180,
-      render: (timestamp) => (
-        <div>
-          <div style={{ fontWeight: '500', fontSize: '12px' }}>
-            {auditAPI.utils.formatTimestamp(timestamp)}
-          </div>
-        </div>
-      )
-    },
-    {
-      title: '👤 User Information',
-      dataIndex: 'realUsername',
-      key: 'realUsername',
-      width: 220,
-      render: (realUsername, record) => {
-        const displayName = realUsername || record.username || record.user_id || 'System';
-        const userId = record.user_id;
-        const userEmail = record.userEmail;
-        const userRole = record.userRole;
+      width: 200,
+      render: (timestamp) => {
+        if (!timestamp) return <span style={{ color: '#ccc', fontStyle: 'italic' }}>N/A</span>;
         
-        const isRealUsername = realUsername && realUsername !== userId;
-        const isSystemUser = !userId || userId === 'system' || userId === 'System';
-        const isAdmin = userRole === 'admin';
-        const isDoctor = userRole === 'doctor';
-        
-        // Enhanced user avatar and status
-        const getUserAvatar = () => {
-          if (isSystemUser) return <SettingOutlined style={{ color: '#1890ff', fontSize: '16px' }} />;
-          if (isAdmin) return <UserOutlined style={{ color: '#1890ff', fontSize: '16px' }} />;
-          if (isDoctor) return <UserOutlined style={{ color: '#1890ff', fontSize: '16px' }} />;
-          return <UserOutlined style={{ color: isRealUsername ? '#1890ff' : '#faad14', fontSize: '16px' }} />;
-        };
-        
-        const getUserStatus = () => {
-          if (isSystemUser) return { color: '#1890ff', text: 'SYSTEM' };
-          if (isAdmin) return { color: '#1890ff', text: 'ADMIN' };
-          if (isDoctor) return { color: '#1890ff', text: 'DOCTOR' };
-          if (isRealUsername) return { color: '#1890ff', text: 'USER' };
-          return { color: '#faad14', text: 'UNKNOWN' };
-        };
-        
-        const status = getUserStatus();
+        // Convert to Perth time (UTC+8)
+        const date = new Date(timestamp);
+        const perthDate = new Date(date.getTime() + (8 * 60 * 60 * 1000)); // Add 8 hours for Perth time
         
         return (
           <div style={{ 
-            padding: '8px 12px', 
-            borderRadius: '8px', 
+            padding: '8px 12px',
             backgroundColor: '#f8f9fa',
-            border: `1px solid ${status.color === '#52c41a' ? '#1890ff20' : status.color}20`,
-            position: 'relative'
+            borderRadius: '8px',
+            border: '1px solid #e8e8e8'
           }}>
-            {/* User Header */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-              <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center',
-                width: '32px',
-                height: '32px',
-                borderRadius: '50%',
-                backgroundColor: `${status.color}15`,
-                border: `2px solid ${status.color}30`
-              }}>
-                {getUserAvatar()}
-              </div>
-              
-              <div style={{ flex: 1 }}>
-                <div style={{ 
-                  fontWeight: '600', 
-                  fontSize: '14px',
-                  color: '#262626',
-                  marginBottom: 2
-                }}>
-                  {isRealUsername ? displayName : isSystemUser ? 'System Process' : `User_${userId?.slice(-6)}`}
-                </div>
-                
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Badge 
-                    status={status.color === '#1890ff' ? 'processing' : 'warning'} 
-                    text={status.text} 
-                    style={{ fontSize: '10px', fontWeight: '500' }}
-                  />
-                  
-                  {isRealUsername && (
-                    <div style={{ 
-                      width: '6px', 
-                      height: '6px', 
-                      borderRadius: '50%', 
-                      backgroundColor: '#1890ff',
-                      marginLeft: 4
-                    }} />
-                  )}
-                </div>
-              </div>
+            <div style={{ 
+              fontWeight: '600', 
+              fontSize: '13px',
+              color: '#262626',
+              marginBottom: '4px'
+            }}>
+              {perthDate.toLocaleDateString('en-US', { 
+                weekday: 'short',
+                month: 'short', 
+                day: 'numeric',
+                year: 'numeric',
+                timeZone: 'Australia/Perth'
+              })}
+            </div>
+            <div style={{ 
+              fontWeight: '500', 
+              fontSize: '12px',
+              color: '#595959',
+              marginBottom: '2px'
+            }}>
+              {perthDate.toLocaleTimeString('en-US', { 
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: true,
+                timeZone: 'Australia/Perth'
+              })}
+            </div>
+            <div style={{ 
+              fontSize: '10px',
+              color: '#8c8c8c',
+              fontStyle: 'italic'
+            }}>
+              (Perth time)
+            </div>
+          </div>
+        );
+      }
+    },
+        {
+      title: '👤 User Information',
+      dataIndex: 'realUsername',
+      key: 'realUsername',
+      width: 250,
+      render: (realUsername, record) => {
+        const userId = record.user_id;
+        const userRole = record.userRole;
+        const userEmail = record.userEmail;
+        
+        // Debug: Log user data for troubleshooting
+        console.log('User data for record:', {
+          realUsername,
+          username: record.username,
+          userId,
+          userRole,
+          userEmail,
+          recordId: record.id
+        });
+        
+        // Get display name with unique identifier
+        let displayName = 'Unknown';
+        let uniqueId = '';
+        
+        if (realUsername && realUsername !== userId) {
+          displayName = realUsername.replace(/_/g, ' ').replace(/-/g, ' ');
+          displayName = displayName.split(' ').map(word => 
+            word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+          ).join(' ');
+          uniqueId = userId ? `#${userId.slice(-4)}` : '';
+        } else if (record.username && record.username !== userId) {
+          displayName = record.username.replace(/_/g, ' ').replace(/-/g, ' ');
+          displayName = displayName.split(' ').map(word => 
+            word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+          ).join(' ');
+          uniqueId = userId ? `#${userId.slice(-4)}` : '';
+        } else if (userId) {
+          displayName = `User_${userId.slice(-6)}`;
+          uniqueId = `#${userId.slice(-4)}`;
+        } else {
+          displayName = 'System';
+          uniqueId = record.id ? `#${record.id.slice(-4)}` : '';
+        }
+        
+        // Get role color and icon
+        const getRoleConfig = () => {
+          if (userRole === 'admin') {
+            return { color: '#1890ff', icon: '🔧', text: 'Admin' };
+          } else if (userRole === 'doctor') {
+            return { color: '#52c41a', icon: '👨‍⚕️', text: 'Doctor' };
+          } else {
+            return { color: '#8c8c8c', icon: '👤', text: 'User' };
+          }
+        };
+        
+        const roleConfig = getRoleConfig();
+        
+        return (
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'flex-start', 
+            gap: 12,
+            padding: '12px 16px',
+            backgroundColor: '#ffffff',
+            borderRadius: '10px',
+            border: '1px solid #e8e8e8',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+            minHeight: '80px'
+          }}>
+            <div style={{ 
+              width: '42px',
+              height: '42px',
+              borderRadius: '50%',
+              backgroundColor: `${roleConfig.color}15`,
+              border: `2px solid ${roleConfig.color}30`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '18px',
+              boxShadow: `0 3px 6px ${roleConfig.color}25`,
+              flexShrink: 0
+            }}>
+              {roleConfig.icon}
             </div>
             
-            {/* User Details */}
-            {userEmail && (
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {/* Username with Unique ID */}
               <div style={{ 
-                fontSize: '12px', 
-                color: '#666', 
-                marginBottom: 4,
+                fontWeight: '800', 
+                fontSize: '15px',
+                color: '#1a1a1a',
+                marginBottom: '6px',
+                lineHeight: '1.2',
                 display: 'flex',
                 alignItems: 'center',
-                gap: 4
+                gap: '6px'
               }}>
-                <span style={{ fontSize: '10px' }}>📧</span>
-                {userEmail}
+                <span>👤</span>
+                <span>{displayName}</span>
+                {uniqueId && (
+                  <span style={{ 
+                    fontSize: '11px',
+                    color: '#666',
+                    fontWeight: '500',
+                    backgroundColor: '#f0f0f0',
+                    padding: '1px 4px',
+                    borderRadius: '3px',
+                    fontFamily: 'monospace'
+                  }}>
+                    {uniqueId}
+                  </span>
+                )}
               </div>
-            )}
-            
-            {userRole && (
+              
+              {/* Role Badge */}
               <div style={{ 
-                fontSize: '11px', 
-                color: '#888',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4
+                fontSize: '11px',
+                color: roleConfig.color,
+                fontWeight: '700',
+                marginBottom: '6px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.8px',
+                backgroundColor: `${roleConfig.color}12`,
+                padding: '3px 8px',
+                borderRadius: '6px',
+                display: 'inline-block',
+                border: `1px solid ${roleConfig.color}25`,
+                boxShadow: `0 1px 3px ${roleConfig.color}15`
               }}>
-                <span style={{ fontSize: '10px' }}>👨‍⚕️</span>
-                {userRole === 'admin' ? 'Administrator' : 
-                 userRole === 'doctor' ? 'Medical Doctor' : 
-                 userRole.charAt(0).toUpperCase() + userRole.slice(1)}
+                {roleConfig.text}
               </div>
-            )}
-            
-            {/* Unmapped User Warning */}
-            {!isRealUsername && !isSystemUser && (
-              <div style={{ 
-                fontSize: '11px', 
-                color: '#ff4d4f', 
-                marginTop: 4,
-                padding: '4px 8px',
-                backgroundColor: '#fff2f0',
-                borderRadius: '4px',
-                border: '1px solid #ffccc7',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4
-              }}>
-                <span style={{ fontSize: '10px' }}>⚠️</span>
-                ID: {userId?.slice(-8)} (unmapped)
-              </div>
-            )}
-            
-            {/* User ID (subtle) */}
-            {userId && !isSystemUser && (
-              <div style={{ 
-                fontSize: '9px', 
-                color: '#ccc', 
-                marginTop: 4,
-                fontFamily: 'monospace'
-              }}>
-                #{userId?.slice(-12)}
-              </div>
-            )}
+              
+              {/* Email */}
+              {userEmail && (
+                <div style={{ 
+                  fontSize: '11px',
+                  color: '#555',
+                  fontFamily: 'monospace',
+                  backgroundColor: '#f8f9fa',
+                  padding: '4px 8px',
+                  borderRadius: '5px',
+                  border: '1px solid #e9ecef',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                }}>
+                  <span style={{ fontSize: '10px', color: '#666' }}>📧</span>
+                  <span style={{ 
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    fontWeight: '500'
+                  }}>
+                    {userEmail}
+                  </span>
+                </div>
+              )}
+              
+              {/* User ID (if available) */}
+              {userId && (
+                <div style={{ 
+                  fontSize: '9px',
+                  color: '#888',
+                  fontFamily: 'monospace',
+                  marginTop: '4px',
+                  padding: '2px 6px',
+                  backgroundColor: '#f1f3f4',
+                  borderRadius: '3px',
+                  display: 'inline-block'
+                }}>
+                  ID: {userId.slice(-8)}
+                </div>
+              )}
+            </div>
           </div>
         );
       }
@@ -405,23 +581,119 @@ const AuditLogsProfessional = () => {
       title: 'Event',
       dataIndex: 'action',
       key: 'action',
-      width: 120,
-      render: (action) => (
-        <Tag color="blue" style={{ fontSize: '11px', fontWeight: '500' }}>
-          {action}
-        </Tag>
-      )
+      width: 150,
+      render: (action, record) => {
+        // Debug: Log the action and record for troubleshooting
+        console.log('Rendering event:', { action, record });
+        
+        // Get event icon based on action type
+        const getEventIcon = (action) => {
+          if (!action) return '📋';
+          const actionLower = action.toLowerCase();
+          if (actionLower.includes('login') || actionLower.includes('auth')) return '🔐';
+          if (actionLower.includes('create') || actionLower.includes('add')) return '➕';
+          if (actionLower.includes('update') || actionLower.includes('edit')) return '✏️';
+          if (actionLower.includes('delete') || actionLower.includes('remove')) return '🗑️';
+          if (actionLower.includes('view') || actionLower.includes('read')) return '👁️';
+          if (actionLower.includes('export') || actionLower.includes('download')) return '📥';
+          if (actionLower.includes('upload') || actionLower.includes('import')) return '📤';
+          if (actionLower.includes('verify') || actionLower.includes('check')) return '✅';
+          if (actionLower.includes('error') || actionLower.includes('fail')) return '❌';
+          return '📋';
+        };
+
+        const eventIcon = getEventIcon(action);
+        const eventColor = record?.status === 'failure' ? '#ff4d4f' : 
+                          record?.risk_level === 'high' || record?.risk_level === 'critical' ? '#ff7a45' : '#1890ff';
+
+        const displayAction = action || record?.event_type || record?.action_type || 'Unknown Event';
+
+        return (
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '6px',
+            padding: '4px 8px',
+            backgroundColor: `${eventColor}10`,
+            borderRadius: '6px',
+            border: `1px solid ${eventColor}20`
+          }}>
+            <span style={{ fontSize: '12px' }}>{eventIcon}</span>
+            <Tag 
+              color={eventColor} 
+              style={{ 
+                fontSize: '11px', 
+                fontWeight: '500',
+                margin: 0,
+                border: 'none',
+                backgroundColor: 'transparent',
+                color: eventColor
+              }}
+            >
+              {displayAction}
+            </Tag>
+          </div>
+        );
+      }
     },
     {
       title: 'Category',
       dataIndex: 'category',
       key: 'category',
-      width: 100,
-      render: (category) => (
-        <Tag color="purple" style={{ fontSize: '10px' }}>
-          {category || 'N/A'}
-        </Tag>
-      )
+      width: 120,
+      render: (category, record) => {
+        // Debug: Log the category for troubleshooting
+        console.log('Rendering category:', { category, record });
+        
+        const getCategoryConfig = (category) => {
+          const configs = {
+            'security': { color: '#ff4d4f', icon: '🔒', text: 'Security' },
+            'compliance': { color: '#722ed1', icon: '📋', text: 'Compliance' },
+            'operational': { color: '#1890ff', icon: '⚙️', text: 'Operational' },
+            'clinical': { color: '#52c41a', icon: '🏥', text: 'Clinical' },
+            'administrative': { color: '#fa8c16', icon: '👔', text: 'Admin' },
+            'user_management': { color: '#13c2c2', icon: '👥', text: 'Users' },
+            'data_access': { color: '#eb2f96', icon: '📊', text: 'Data' },
+            'system': { color: '#8c8c8c', icon: '🖥️', text: 'System' }
+          };
+          
+          // Try to determine category from action if not provided
+          let determinedCategory = category;
+          if (!category && record?.action) {
+            const actionLower = record.action.toLowerCase();
+            if (actionLower.includes('login') || actionLower.includes('auth')) determinedCategory = 'security';
+            else if (actionLower.includes('create') || actionLower.includes('add') || actionLower.includes('update') || actionLower.includes('edit')) determinedCategory = 'operational';
+            else if (actionLower.includes('view') || actionLower.includes('read')) determinedCategory = 'data_access';
+            else if (actionLower.includes('export') || actionLower.includes('download')) determinedCategory = 'data_access';
+            else determinedCategory = 'system';
+          }
+          
+          return configs[determinedCategory?.toLowerCase()] || { color: '#8c8c8c', icon: '📋', text: determinedCategory || 'General' };
+        };
+
+        const config = getCategoryConfig(category);
+        
+        return (
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '4px',
+            padding: '3px 6px',
+            backgroundColor: `${config.color}10`,
+            borderRadius: '4px',
+            border: `1px solid ${config.color}20`
+          }}>
+            <span style={{ fontSize: '10px' }}>{config.icon}</span>
+            <span style={{ 
+              fontSize: '10px', 
+              fontWeight: '500',
+              color: config.color
+            }}>
+              {config.text}
+            </span>
+          </div>
+        );
+      }
     },
     {
       title: 'Risk Level',
@@ -511,7 +783,7 @@ const AuditLogsProfessional = () => {
             <div>
               <Title level={2} style={{ color: 'white', margin: 0 }}>
                 <SecurityScanOutlined style={{ marginRight: 12 }} />
-                Professional Audit Dashboard
+                Audit Logs Dashboard
               </Title>
               <Text style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: 16 }}>
                 Enterprise-grade security monitoring and compliance tracking
@@ -535,7 +807,7 @@ const AuditLogsProfessional = () => {
                 <Button
                   type="primary"
                   icon={<ReloadOutlined />}
-                  onClick={loadAllData}
+                  onClick={refreshData}
                   loading={loading}
                   style={{ 
                     backgroundColor: 'rgba(255, 255, 255, 0.9)', 
@@ -563,6 +835,37 @@ const AuditLogsProfessional = () => {
             </div>
           </div>
         </div>
+
+        {/* Status Information */}
+        <Alert
+          message={`Audit Logs Status: ${auditLogs.length} entries loaded`}
+          description={
+            <div>
+              <div>Last updated: {new Date().toLocaleString('en-US', { timeZone: 'Australia/Perth' })} (Perth time)</div>
+              {auditLogs.length > 0 && (
+                <div style={{ marginTop: '4px', fontSize: '12px', color: '#666' }}>
+                  <div>Sample event: {auditLogs[0]?.action || 'No action field'} | 
+                  Category: {auditLogs[0]?.category || 'No category field'} | 
+                  Status: {auditLogs[0]?.status || 'No status field'}</div>
+                  <div style={{ marginTop: '2px' }}>
+                    Unique users: {new Set(auditLogs.map(log => log.user_id || log.realUsername)).size} | 
+                    Users: {Array.from(new Set(auditLogs.map(log => log.realUsername || log.username).filter(Boolean))).slice(0, 3).join(', ')}
+                    {auditLogs.length > 3 && '...'}
+                  </div>
+                </div>
+              )}
+            </div>
+          }
+          type="info"
+          showIcon
+          icon={<DatabaseOutlined />}
+          style={{ marginBottom: 16 }}
+          action={
+            <Button size="small" type="link" onClick={refreshData}>
+              Refresh Now
+            </Button>
+          }
+        />
 
         {/* Security Alerts */}
         {securityAlerts.length > 0 && (
