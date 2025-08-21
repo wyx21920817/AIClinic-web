@@ -38,7 +38,7 @@ import {
 const { Title, Text } = Typography;
 const { Option } = Select;
 
-const AuditLogsEnhanced = () => {
+const AuditLogsProfessional = () => {
   const [auditLogs, setAuditLogs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [pagination, setPagination] = useState({
@@ -597,4 +597,4 @@ const AuditLogsEnhanced = () => {
   );
 };
 
-export default AuditLogsEnhanced; 
+export default AuditLogsProfessional; 

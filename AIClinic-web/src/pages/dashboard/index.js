@@ -5,7 +5,6 @@ import {
   Col, 
   Typography, 
   Table, 
-  Progress, 
   Alert, 
   Spin, 
   Statistic, 
@@ -19,10 +18,7 @@ import {
   UserOutlined, 
   HeartOutlined,
   TeamOutlined,
-  SecurityScanOutlined,
   ClockCircleOutlined,
-  CheckCircleOutlined,
-  ExclamationCircleOutlined,
   BarChartOutlined,
   ReloadOutlined,
   BellOutlined
@@ -60,7 +56,7 @@ const WelcomeSection = styled.div`
 // Simple Dashboard Component
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { getUserDisplayName, isAdmin, isDoctor } = useRole();
+  const { getUserDisplayName, isAdmin } = useRole();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState({
     patients: [],
