@@ -11,21 +11,17 @@ import {
   List,
   Alert,
   Button,
-  Tooltip,
   Statistic
 } from 'antd';
 import {
   ExperimentOutlined,
   EyeOutlined,
-  InfoCircleOutlined,
   CheckCircleOutlined,
-  ExclamationCircleOutlined,
-  BarChartOutlined,
   HeatMapOutlined
 } from '@ant-design/icons';
 import styled from '@emotion/styled';
 
-const { Title, Text, Paragraph } = Typography;
+const { Title, Text } = Typography;
 
 const XAICard = styled(Card)`
   border-radius: 12px;
@@ -98,7 +94,6 @@ const XAIInterpretationUI = ({
   showXAIOverlay = true,
   onToggleXAIView 
 }) => {
-  const [activeTab, setActiveTab] = useState('overview');
 
   // Real XAI data structure
   const realXaiData = xaiData || {
@@ -330,6 +325,69 @@ const XAIInterpretationUI = ({
     </XAICard>
   );
 
+  const renderValidationPanel = () => {
+    const results = xaiData?.results;
+    if (!Array.isArray(results) || results.length === 0) return null;
+
+    const validationItems = results
+      .filter(r => r?.validation)
+      .map((r, idx) => ({
+        key: `${r.lead || 'lead'}-${idx}`,
+        lead: r.lead || 'N/A',
+        status: r.validation.status,
+        reasons: r.validation.reasons || [],
+        metrics: r.validation.metrics_used || {},
+      }));
+
+    if (validationItems.length === 0) return null;
+
+    const statusColor = (s) => s === 'pass' ? 'green' : s === 'warn' ? 'orange' : 'red';
+
+    return (
+      <XAICard title="XAI Validation">
+        <Space direction="vertical" style={{ width: '100%' }}>
+          {validationItems.map(item => (
+            <Card key={item.key} size="small">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Space>
+                  <Text strong>Lead:</Text>
+                  <Tag color="blue">{item.lead}</Tag>
+                </Space>
+                <Tag color={statusColor(item.status)} style={{ fontWeight: 600 }}>
+                  {item.status?.toUpperCase()}
+                </Tag>
+              </div>
+              <Divider style={{ margin: '8px 0' }} />
+              <Title level={5} style={{ marginTop: 0 }}>Reasons</Title>
+              <List
+                size="small"
+                dataSource={item.reasons}
+                renderItem={(reason, i) => (
+                  <List.Item>
+                    <Space>
+                      <CheckCircleOutlined style={{ color: statusColor(item.status) }} />
+                      <Text>{reason}</Text>
+                    </Space>
+                  </List.Item>
+                )}
+              />
+              {item.metrics && (
+                <div style={{ marginTop: 8 }}>
+                  <Title level={5} style={{ marginBottom: 4 }}>Metrics Used</Title>
+                  <Space wrap>
+                    {Object.entries(item.metrics).map(([k, v]) => (
+                      <Tag key={k}>{k}: {typeof v === 'number' ? v.toFixed(3) : String(v)}</Tag>
+                    ))}
+                  </Space>
+                </div>
+              )}
+            </Card>
+          ))}
+        </Space>
+      </XAICard>
+    );
+  };
+
   const renderOverallConfidence = () => (
     <XAICard>
       <Row gutter={16} align="middle">
@@ -392,6 +450,7 @@ const XAIInterpretationUI = ({
       </Row>
 
       {renderConfidenceHeatmap()}
+      {renderValidationPanel()}
     </div>
   );
 };

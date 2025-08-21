@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card,
   Table,
@@ -36,7 +36,6 @@ import {
 } from '@ant-design/icons';
 
 const { Title, Text } = Typography;
-const { RangePicker } = DatePicker;
 const { Option } = Select;
 
 const AuditLogsEnhanced = () => {
@@ -130,11 +129,7 @@ const AuditLogsEnhanced = () => {
     'user', 'patient', 'ecg_file', 'ai_diagnosis', 'feedback', 'permission', 'settings'
   ];
 
-  useEffect(() => {
-    fetchAuditLogs();
-  }, [pagination.current, pagination.pageSize, filters]);
-
-  const fetchAuditLogs = async () => {
+  const fetchAuditLogs = useCallback(async () => {
     setLoading(true);
     try {
       await new Promise(resolve => setTimeout(resolve, 500));
@@ -183,7 +178,11 @@ const AuditLogsEnhanced = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters, pagination.current, pagination.pageSize]);
+
+  useEffect(() => {
+    fetchAuditLogs();
+  }, [fetchAuditLogs]);
 
   const handleTableChange = (paginationInfo) => {
     setPagination(prev => ({
