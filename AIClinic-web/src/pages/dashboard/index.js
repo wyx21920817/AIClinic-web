@@ -5,6 +5,7 @@ import {
   Col, 
   Typography, 
   Table, 
+  Progress, 
   Alert, 
   Spin, 
   Statistic, 
@@ -18,13 +19,17 @@ import {
   UserOutlined, 
   HeartOutlined,
   TeamOutlined,
+  SecurityScanOutlined,
   ClockCircleOutlined,
+  CheckCircleOutlined,
+  ExclamationCircleOutlined,
   BarChartOutlined,
   ReloadOutlined,
   BellOutlined
 } from '@ant-design/icons';
 import styled from '@emotion/styled';
 import { useNavigate } from 'react-router-dom';
+import useRole from '../../utils/useRole';
 import { API_BASE_URL } from '../../services/api/config';
 
 const { Title, Text } = Typography;
@@ -55,6 +60,7 @@ const WelcomeSection = styled.div`
 // Simple Dashboard Component
 const Dashboard = () => {
   const navigate = useNavigate();
+  const { getUserDisplayName, isAdmin, isDoctor } = useRole();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState({
     patients: [],
@@ -67,12 +73,6 @@ const Dashboard = () => {
     }
   });
   const [error, setError] = useState(null);
-
-  // Get user info from localStorage
-  const getUserDisplayName = () => {
-    const userData = JSON.parse(localStorage.getItem('userData') || '{}');
-    return userData.username || userData.name || 'User';
-  };
 
   // Simple function to fetch real data
   const loadRealData = async () => {
@@ -278,7 +278,7 @@ const Dashboard = () => {
           Welcome back, {getUserDisplayName()}!
         </Title>
         <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 16 }}>
-          Patient Management Dashboard
+          {isAdmin() ? 'System Overview' : 'Patient Management Dashboard'}
         </Text>
         <Button 
           type="primary" 
