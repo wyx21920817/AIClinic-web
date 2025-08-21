@@ -7,6 +7,8 @@ const ChatDialog = () => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
   const [previousState, setPreviousState] = useState({ expanded: false, maximized: false });
+  const [isThinking, setIsThinking] = useState(false);
+  const [thinkingDots, setThinkingDots] = useState(0);
   const [messages, setMessages] = useState([{
     content: `Welcome! I'm your medical AI assistant. Here are some examples of what you can ask:
 
@@ -43,6 +45,17 @@ How may I assist you today?`,
     // Use setTimeout to ensure scrolling after DOM updates
     setTimeout(scrollToBottom, 100);
   }, [messages]);
+  
+  // Animation for thinking dots
+  useEffect(() => {
+    let interval;
+    if (isThinking) {
+      interval = setInterval(() => {
+        setThinkingDots((prev) => (prev + 1) % 3);
+      }, 500);
+    }
+    return () => clearInterval(interval);
+  }, [isThinking]);
 
   // Initialize conversation on component mount
   useEffect(() => {
@@ -83,6 +96,9 @@ How may I assist you today?`,
 
     setMessages(prev => [...prev, userMessage]);
     setInputMessage('');
+    
+    // Show thinking indicator
+    setIsThinking(true);
 
     try {
       const response = await fetch(`${CHAT_API_URL}${API_ENDPOINTS.CHAT}`, {
@@ -98,6 +114,9 @@ How may I assist you today?`,
 
       const data = await response.json();
       
+      // Hide thinking indicator after response is received
+      setIsThinking(false);
+      
       if (data.conversation_id) {
         setConversationId(data.conversation_id);
       }
@@ -111,6 +130,9 @@ How may I assist you today?`,
       setMessages(prev => [...prev, botMessage]);
     } catch (error) {
       console.error('Error sending message:', error);
+      // Hide thinking indicator on error
+      setIsThinking(false);
+      
       const errorMessage = {
         content: 'Sorry, there was an error processing your message.',
         isUser: false,
@@ -186,6 +208,21 @@ How may I assist you today?`,
                 <div className="message-timestamp">{message.timestamp}</div>
               </div>
             ))}
+            {isThinking && (
+              <div className="message bot-message thinking-message">
+                <div className="message-content">
+                  <div className="thinking-indicator">
+                    <span>Assistant is thinking</span>
+                    <span className="thinking-dots">
+                      {thinkingDots === 0 && '● ○ ○'}
+                      {thinkingDots === 1 && '○ ● ○'}
+                      {thinkingDots === 2 && '○ ○ ●'}
+                    </span>
+                  </div>
+                </div>
+                <div className="message-timestamp">{new Date().toLocaleTimeString()}</div>
+              </div>
+            )}
             <div ref={messagesEndRef} />
           </div>
           <div className="chat-input">

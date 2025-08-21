@@ -140,6 +140,28 @@
   margin-top: 4px;
 }
 
+.thinking-message {
+  opacity: 1;
+  background-color: #e8f5e9;
+  border-left: 3px solid #4caf50;
+}
+
+.thinking-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  color: #2e7d32;
+}
+
+.thinking-dots {
+  display: inline-block;
+  font-size: 16px;
+  margin-left: 8px;
+  min-width: 60px;
+  color: #2e7d32;
+}
+
 .chat-input {
   padding: 12px;
   border-top: 1px solid #eee;
