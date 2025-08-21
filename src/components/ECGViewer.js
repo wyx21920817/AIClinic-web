@@ -88,6 +88,7 @@ const ECGViewer = () => {
   const [showProgress, setShowProgress] = React.useState(false);
   const [convertedDicomUrl, setConvertedDicomUrl] = React.useState(null);
   const [dicomTags, setDicomTags] = React.useState(null);
+  const [isDiagnosing, setIsDiagnosing] = React.useState(false);
   const statusCheckIntervalRef = React.useRef(null);
   const viewerRef = React.useRef(null);
   const containerId = 'ecg-container';
@@ -97,7 +98,7 @@ const ECGViewer = () => {
       try {
         setError(null);
         console.log('Starting to load ECG file...');
-        
+
         console.log('Fetching ECG file for user:', userId, 'instance:', instanceId);
         const response = await request.get(
           API_ENDPOINTS.ECG_INSTANCE(userId, instanceId),
@@ -107,7 +108,7 @@ const ECGViewer = () => {
         console.log('Array buffer received, loading DICOM file...');
         const byteArray = new Uint8Array(response);
         const dataSet = dicomParser.parseDicom(byteArray);
-        
+
         // Collect all DICOM tags
         const tags = {};
         for (let tag in dataSet.elements) {
@@ -127,7 +128,7 @@ const ECGViewer = () => {
           }
         }
         setDicomTags(tags);
-        
+
         await loadDicomFile(response);
         console.log('DICOM file loaded successfully');
       } catch (error) {
@@ -164,20 +165,20 @@ const ECGViewer = () => {
     try {
       const fileName = event?.target?.files?.[0]?.name || 'unknown';
       console.log(`========== Analyzing DICOM File: ${fileName} ==========`);
-      
+
       // Parse DICOM data to get detailed information
       const byteArray = new Uint8Array(arrayBuffer);
       const dataSet = dicomParser.parseDicom(byteArray);
-      
+
       // Print key tag information
       const transferSyntax = dataSet.string('x00020010');
       const sopClassUid = dataSet.string('x00080016');
       const modality = dataSet.string('x00080060');
-      
+
       console.log('Transfer Syntax:', transferSyntax);
       console.log('SOP Class UID:', sopClassUid);
       console.log('Modality:', modality);
-      
+
       // Get waveform sequence
       const waveformSequence = dataSet.elements['x54000100'];
       if (waveformSequence) {
@@ -197,7 +198,7 @@ const ECGViewer = () => {
 
             // Read waveform data from sequence item
             const itemData = byteArray.slice(item.dataOffset, item.dataOffset + item.length);
-            
+
             // Print first 32 bytes of sequence item for analysis
             console.log('Item Data Sample:', Array.from(itemData.slice(0, 32)).map(b => b.toString(16).padStart(2, '0')).join(' '));
 
@@ -217,10 +218,10 @@ const ECGViewer = () => {
                 // Explicit VR
                 vr = String.fromCharCode(itemData[offset + 4], itemData[offset + 5]);
                 if (['OB', 'OW', 'OF', 'SQ', 'UT', 'UN'].includes(vr)) {
-                  valueLength = itemData[offset + 8] + 
-                              (itemData[offset + 9] << 8) +
-                              (itemData[offset + 10] << 16) +
-                              (itemData[offset + 11] << 24);
+                  valueLength = itemData[offset + 8] +
+                    (itemData[offset + 9] << 8) +
+                    (itemData[offset + 10] << 16) +
+                    (itemData[offset + 11] << 24);
                   dataStart = offset + 12;
                 } else {
                   valueLength = itemData[offset + 6] + (itemData[offset + 7] << 8);
@@ -228,10 +229,10 @@ const ECGViewer = () => {
                 }
               } else {
                 // Implicit VR
-                valueLength = itemData[offset + 4] + 
-                            (itemData[offset + 5] << 8) +
-                            (itemData[offset + 6] << 16) +
-                            (itemData[offset + 7] << 24);
+                valueLength = itemData[offset + 4] +
+                  (itemData[offset + 5] << 8) +
+                  (itemData[offset + 6] << 16) +
+                  (itemData[offset + 7] << 24);
                 dataStart = offset + 8;
               }
 
@@ -240,13 +241,13 @@ const ECGViewer = () => {
               // If found waveform data tag
               if (group === 0x5400 && element === 0x1010) {
                 console.log(`Found waveform data at offset ${offset}, length ${valueLength}`);
-                
+
                 const waveformBuffer = itemData.slice(dataStart, dataStart + valueLength);
                 console.log('Waveform data sample:', Array.from(waveformBuffer.slice(0, 32)).map(b => b.toString(16).padStart(2, '0')).join(' '));
 
                 const dataView = new DataView(waveformBuffer.buffer, waveformBuffer.byteOffset, waveformBuffer.length);
                 const samples = new Int16Array(valueLength / 2);
-                
+
                 for (let j = 0; j < samples.length; j++) {
                   samples[j] = dataView.getInt16(j * 2, true);
                 }
@@ -258,7 +259,7 @@ const ECGViewer = () => {
                   max: Math.max(...samples),
                   meanValue: samples.reduce((a, b) => a + b, 0) / samples.length
                 };
-                
+
                 console.log(`Waveform Data Analysis:`, dataAnalysis);
                 break;
               }
@@ -297,7 +298,7 @@ const ECGViewer = () => {
       console.log('Loading canvas...');
       await viewer.loadCanvas();
       console.log('Canvas loaded successfully');
-      
+
     } catch (error) {
       console.error('Failed to load ECG:', error);
       console.error('Error details:', {
@@ -317,7 +318,7 @@ const ECGViewer = () => {
     setConversionProgress(0);
     setShowProgress(true);
     setConvertedDicomUrl(null); // Reset URL
-    
+
     const formData = new FormData();
     formData.append('file', file);
 
@@ -353,7 +354,7 @@ const ECGViewer = () => {
           })
           .then(data => {
             console.log('Status check response:', data);
-            
+
             let statusText = `Status: ${data.status}\n`;
             if (data.message) {
               statusText += `Message: ${data.message}\n`;
@@ -370,7 +371,7 @@ const ECGViewer = () => {
                 clearInterval(statusCheckIntervalRef.current);
                 statusCheckIntervalRef.current = null;
               }
-              
+
               if (data.dicom_files && data.dicom_files.length > 0) {
                 const downloadUrl = `http://localhost:8000/download/${taskId}/${data.dicom_files[0]}`;
                 console.log('Set download URL:', downloadUrl);
@@ -417,7 +418,7 @@ const ECGViewer = () => {
 
   const handleViewConverted = async () => {
     if (!convertedDicomUrl) return;
-    
+
     try {
       const response = await fetch(convertedDicomUrl);
       if (!response.ok) {
@@ -432,13 +433,56 @@ const ECGViewer = () => {
     }
   };
 
+  // Update AI diagnosis and redirect to new instance if returned
+  const handleGetDiagnosis = async () => {
+    if (!userId || !instanceId) {
+      message.error('Missing user ID or instance ID');
+      return;
+    }
+
+    try {
+      setIsDiagnosing(true);
+      message.loading('Generating new AI diagnosis...', 0);
+
+      const url = `${API_ENDPOINTS.ECG}/${userId}/instances/${instanceId}/diagnose`;
+      const data = await request.post(url);
+
+      if (data) {
+        message.success('AI diagnosis updated successfully');
+
+        if (data.instance_id && String(data.instance_id) !== String(instanceId)) {
+          message.info('Redirecting to new diagnosis instance...');
+          setTimeout(() => {
+            navigate(`/ecg-view/${userId}/${data.instance_id}`);
+          }, 500);
+        }
+      }
+    } catch (error) {
+      let errorMessage = 'Failed to get AI diagnosis';
+      if (error.response?.status === 404) {
+        errorMessage = 'ECG instance not found. Please check the file and try again.';
+      } else if (error.response?.status === 500) {
+        errorMessage = 'AI diagnosis service temporarily unavailable. Please try again later.';
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      message.error(errorMessage);
+      setError(errorMessage);
+    } finally {
+      setIsDiagnosing(false);
+      message.destroy();
+    }
+  };
+
   return (
     <Card
       title={
         <Space>
-          <Button 
-            icon={<ArrowLeftOutlined />} 
-            type="link" 
+          <Button
+            icon={<ArrowLeftOutlined />}
+            type="link"
             onClick={() => navigate(-1)}
           />
           <span>ECG Viewer</span>
@@ -456,8 +500,8 @@ const ECGViewer = () => {
 
         {showProgress && (
           <div>
-            <Progress 
-              percent={conversionProgress} 
+            <Progress
+              percent={conversionProgress}
               status="active"
               format={() => statusMessage}
             />
@@ -473,9 +517,9 @@ const ECGViewer = () => {
           </div>
         )}
 
-        <div 
-          id="ecg-container" 
-          style={{ 
+        <div
+          id="ecg-container"
+          style={{
             height: '70vh',
             width: '100%',
             border: '1px solid #f0f0f0',
@@ -485,60 +529,82 @@ const ECGViewer = () => {
           }}
         />
 
-        {dicomTags && dicomTags['x00104000'] && (
-          <Card title="AI Diagnosis Result" style={{ marginTop: '20px' }}>
-            <Row gutter={16}>
-              <Col span={12}>
-                <Card type="inner" title="1D Model Results">
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr>
-                        <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Type</th>
-                        <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Probability</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {dicomTags['x00104000'].split(' | ')[0].split('; ').map(item => {
-                        const [type, prob] = item.split(':');
-                        return (
-                          <tr key={type}>
-                            <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>{type}</td>
-                            <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
-                              {(parseFloat(prob) * 100).toFixed(1)}%
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </Card>
-              </Col>
-              <Col span={12}>
-                <Card type="inner" title="ResNet Top5 Results">
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr>
-                        <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Type</th>
-                        <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Probability</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {dicomTags['x00104000'].split(' | ')[1].replace('ResNet Top5: ', '').split('; ').map(item => {
-                        const [type, prob] = item.split(':');
-                        return (
-                          <tr key={type}>
-                            <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>{type}</td>
-                            <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
-                              {(parseFloat(prob) * 100).toFixed(1)}%
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </Card>
-              </Col>
-            </Row>
+        {dicomTags && (
+          <Card
+            title={
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>AI Diagnosis Result</span>
+                <Button
+                  type="primary"
+                  size="middle"
+                  onClick={handleGetDiagnosis}
+                  loading={isDiagnosing}
+                  style={{ marginLeft: '12px' }}
+                >
+                  Update Diagnose
+                </Button>
+              </div>
+            }
+            style={{ marginTop: '20px' }}
+          >
+            {dicomTags['x00104000'] ? (
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Card type="inner" title="1D Model Results">
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr>
+                          <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Type</th>
+                          <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Probability</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dicomTags['x00104000'].split(' | ')[0].split('; ').map(item => {
+                          const [type, prob] = item.split(':');
+                          return (
+                            <tr key={type}>
+                              <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>{type}</td>
+                              <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                                {(parseFloat(prob) * 100).toFixed(1)}%
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </Card>
+                </Col>
+                <Col span={12}>
+                  <Card type="inner" title="ResNet Top5 Results">
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr>
+                          <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Type</th>
+                          <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Probability</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dicomTags['x00104000'].split(' | ')[1].replace('ResNet Top5: ', '').split('; ').map(item => {
+                          const [type, prob] = item.split(':');
+                          return (
+                            <tr key={type}>
+                              <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>{type}</td>
+                              <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                                {(parseFloat(prob) * 100).toFixed(1)}%
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </Card>
+                </Col>
+              </Row>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '20px', color: '#666' }}>
+                No AI diagnosis available for this ECG file.
+              </div>
+            )}
           </Card>
         )}
 

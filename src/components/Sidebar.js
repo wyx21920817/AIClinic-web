@@ -27,19 +27,19 @@ const Sidebar = () => {
     },
     ...(role === 'admin'
       ? [
-          {
-            key: '/doctors',
-            icon: <TeamOutlined />,
-            label: 'Doctors',
-            onClick: () => navigate('/doctors'),
-          },
-          {
-            key: '/audit-logs',
-            icon: <SecurityScanOutlined />,
-            label: 'Audit Logs',
-            onClick: () => navigate('/audit-logs'),
-          },
-        ]
+        {
+          key: '/doctors',
+          icon: <TeamOutlined />,
+          label: 'Doctors',
+          onClick: () => navigate('/doctors'),
+        },
+        {
+          key: '/audit-logs',
+          icon: <SecurityScanOutlined />,
+          label: 'Audit Logs',
+          onClick: () => navigate('/audit-logs'),
+        },
+      ]
       : []),
     {
       key: '/test-deliverables',
@@ -53,12 +53,7 @@ const Sidebar = () => {
       label: 'XAI Demo',
       onClick: () => navigate('/xai-demo'),
     },
-    {
-      key: '/ecg-ai-demo',
-      icon: <HeartOutlined />,
-      label: 'ECG AI Results Demo',
-      onClick: () => navigate('/ecg-ai-demo'),
-    },
+    // ECG AI Results Demo menu removed
     {
       key: '/role-test',
       icon: <UserOutlined />,

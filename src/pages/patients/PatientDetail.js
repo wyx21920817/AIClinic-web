@@ -147,18 +147,18 @@ const PatientDetail = () => {
 
       // Call the real AIClinic engine API
       const response = await aiDiagnosisAPI.requestDiagnosis(instanceId);
-      
+
       console.log('AIClinic engine response:', response);
-      
+
       // Transform the AIClinic engine response to our display format
       const transformedData = transformAIClinicResponse(response, instanceId);
-      
+
       setAiDiagnosis(prev => ({ ...prev, [instanceId]: transformedData }));
-      
+
       message.success('AI diagnosis completed successfully!');
     } catch (error) {
       console.error('Error requesting AI diagnosis:', error);
-      
+
       // Fallback to mock data if AI server is not available
       if (error.message.includes('Failed to fetch') || error.message.includes('Network error')) {
         message.warning('AI server not available, using demo data');
@@ -177,12 +177,12 @@ const PatientDetail = () => {
     const predictions = response.predictions || {};
     const originalModel = predictions.original_dnn_model || {};
     const resnetModel = predictions.resnet_fine_tuned_model || {};
-    
+
     // Get the top predictions
     const topPredictions = Object.entries(originalModel)
-      .sort(([,a], [,b]) => b - a)
+      .sort(([, a], [, b]) => b - a)
       .slice(0, 3);
-    
+
     const diagnoses = topPredictions.map(([disease, confidence], index) => {
       const config = getDiseaseConfig(disease);
       return {
@@ -254,7 +254,7 @@ const PatientDetail = () => {
 
     try {
       setDiagnosisLoading(prev => ({ ...prev, [instanceId]: true }));
-      
+
       // Try to get real AI diagnosis first
       try {
         const response = await aiDiagnosisAPI.getDiagnosis(instanceId);
@@ -280,14 +280,14 @@ const PatientDetail = () => {
   const requestXAIInterpretation = async (instanceId, diseases) => {
     try {
       message.info('Generating XAI interpretation...');
-      
+
       const response = await aiDiagnosisAPI.getXAIInterpretation(instanceId, diseases);
-      
+
       console.log('XAI Interpretation response:', response);
-      
+
       // Navigate to XAI demo with the results
       navigate(`/xai-demo?instanceId=${instanceId}&diseases=${diseases.join(',')}&xaiData=${encodeURIComponent(JSON.stringify(response))}`);
-      
+
       message.success('XAI interpretation completed!');
     } catch (error) {
       console.error('Error requesting XAI interpretation:', error);
@@ -438,7 +438,7 @@ const PatientDetail = () => {
   const getRiskColor = (risk) => {
     const colors = {
       "low": "#52c41a",
-      "medium": "#faad14", 
+      "medium": "#faad14",
       "high": "#ff7a45",
       "critical": "#ff4d4f",
       "unknown": "#8c8c8c"
@@ -566,216 +566,218 @@ const PatientDetail = () => {
         />
       </Card>
 
-      {/* AI Diagnosis Section */}
-      <Card title="🤖 AI Diagnosis Results" style={{ marginTop: 24 }}>
-        <div style={{ marginBottom: 16 }}>
-          <Text strong>ECG Interpretation Summary</Text>
-          <div style={{ marginTop: 8 }}>
-            {Object.entries(diseaseConfig).map(([code, config]) => (
-              <Tag key={code} color={config.color} style={{ marginBottom: 4 }}>
-                {config.icon} {code}
-              </Tag>
-            ))}
+      {/* AI Diagnosis Section removed */}
+      {false && (
+        <Card title="🤖 AI Diagnosis Results" style={{ marginTop: 24 }}>
+          <div style={{ marginBottom: 16 }}>
+            <Text strong>ECG Interpretation Summary</Text>
+            <div style={{ marginTop: 8 }}>
+              {Object.entries(diseaseConfig).map(([code, config]) => (
+                <Tag key={code} color={config.color} style={{ marginBottom: 4 }}>
+                  {config.icon} {code}
+                </Tag>
+              ))}
+            </div>
           </div>
-        </div>
 
-        <List
-          dataSource={ecgFiles}
-          renderItem={(file) => {
-            const instanceId = file.instanceIDs?.[0];
-            const diagnosisData = mockAiDiagnosisData[instanceId];
-            
-            return (
-              <List.Item>
-                <Card 
-                  size="small" 
-                  title={`ECG Analysis: ${file.filename}`}
-                  style={{ width: '100%' }}
-                  extra={
-                    <Space>
-                      <Button 
-                        type="primary" 
-                        size="small"
-                        loading={diagnosisLoading[instanceId]}
-                        onClick={() => requestAiDiagnosis(instanceId)}
-                      >
-                        🔍 Analyze ECG
-                      </Button>
-                      <Button 
-                        type="default" 
-                        size="small"
-                        onClick={() => navigate(`/xai-demo?instanceId=${instanceId}`)}
-                      >
-                        🧠 View XAI
-                      </Button>
-                    </Space>
-                  }
-                >
-                  {diagnosisData ? (
-                    <div>
-                      {/* Summary Section */}
-                      <Card size="small" title="Analysis Summary" style={{ marginBottom: 16 }}>
-                        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                          <div style={{ flex: 1, minWidth: 150 }}>
-                            <Text strong>Primary Diagnosis:</Text>
-                            <div style={{ marginTop: 4 }}>
-                              {diagnosisData.diagnoses.map((diagnosis, index) => {
-                                const config = getDiseaseConfig(diagnosis.disease);
-                                return (
-                                  <Tag 
-                                    key={index} 
-                                    color={config.color}
-                                    style={{ marginBottom: 4, fontSize: '12px' }}
-                                  >
-                                    {config.icon} {config.name}
-                                  </Tag>
-                                );
-                              })}
-                            </div>
-                          </div>
-                          <div style={{ flex: 1, minWidth: 150 }}>
-                            <Text strong>Overall Confidence:</Text>
-                            <div style={{ marginTop: 4 }}>
-                              <Progress 
-                                percent={diagnosisData.summary.overall_confidence} 
-                                size="small" 
-                                strokeColor={getRiskColor(diagnosisData.summary.risk_assessment)}
-                                format={(percent) => `${percent}%`}
-                              />
-                            </div>
-                          </div>
-                          <div style={{ flex: 1, minWidth: 150 }}>
-                            <Text strong>Risk Assessment:</Text>
-                            <div style={{ marginTop: 4 }}>
-                              <Tag color={getRiskColor(diagnosisData.summary.risk_assessment)}>
-                                {diagnosisData.summary.risk_assessment.toUpperCase()}
-                              </Tag>
-                            </div>
-                          </div>
-                        </div>
-                      </Card>
+          <List
+            dataSource={ecgFiles}
+            renderItem={(file) => {
+              const instanceId = file.instanceIDs?.[0];
+              const diagnosisData = mockAiDiagnosisData[instanceId];
 
-                      {/* Detailed Diagnoses */}
-                      {diagnosisData.diagnoses.map((diagnosis, index) => {
-                        const config = getDiseaseConfig(diagnosis.disease);
-                        return (
-                          <Card 
-                            key={index}
-                            size="small" 
-                            title={
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <span>{config.icon}</span>
-                                <span>{diagnosis.title}</span>
-                                <Tag color={config.color} style={{ marginLeft: 'auto' }}>
-                                  {config.name}
+              return (
+                <List.Item>
+                  <Card
+                    size="small"
+                    title={`ECG Analysis: ${file.filename}`}
+                    style={{ width: '100%' }}
+                    extra={
+                      <Space>
+                        <Button
+                          type="primary"
+                          size="small"
+                          loading={diagnosisLoading[instanceId]}
+                          onClick={() => requestAiDiagnosis(instanceId)}
+                        >
+                          🔍 Analyze ECG
+                        </Button>
+                        <Button
+                          type="default"
+                          size="small"
+                          onClick={() => navigate(`/xai-demo?instanceId=${instanceId}`)}
+                        >
+                          🧠 View XAI
+                        </Button>
+                      </Space>
+                    }
+                  >
+                    {diagnosisData ? (
+                      <div>
+                        {/* Summary Section */}
+                        <Card size="small" title="Analysis Summary" style={{ marginBottom: 16 }}>
+                          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                            <div style={{ flex: 1, minWidth: 150 }}>
+                              <Text strong>Primary Diagnosis:</Text>
+                              <div style={{ marginTop: 4 }}>
+                                {diagnosisData.diagnoses.map((diagnosis, index) => {
+                                  const config = getDiseaseConfig(diagnosis.disease);
+                                  return (
+                                    <Tag
+                                      key={index}
+                                      color={config.color}
+                                      style={{ marginBottom: 4, fontSize: '12px' }}
+                                    >
+                                      {config.icon} {config.name}
+                                    </Tag>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                            <div style={{ flex: 1, minWidth: 150 }}>
+                              <Text strong>Overall Confidence:</Text>
+                              <div style={{ marginTop: 4 }}>
+                                <Progress
+                                  percent={diagnosisData.summary.overall_confidence}
+                                  size="small"
+                                  strokeColor={getRiskColor(diagnosisData.summary.risk_assessment)}
+                                  format={(percent) => `${percent}%`}
+                                />
+                              </div>
+                            </div>
+                            <div style={{ flex: 1, minWidth: 150 }}>
+                              <Text strong>Risk Assessment:</Text>
+                              <div style={{ marginTop: 4 }}>
+                                <Tag color={getRiskColor(diagnosisData.summary.risk_assessment)}>
+                                  {diagnosisData.summary.risk_assessment.toUpperCase()}
                                 </Tag>
                               </div>
-                            }
-                            style={{ marginBottom: 16 }}
-                          >
-                            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                              {/* Clinical Report */}
-                              <Card size="small" title="Clinical Report" style={{ flex: 2, minWidth: 300 }}>
-                                <div style={{ fontSize: '12px', lineHeight: '1.5' }}>
-                                  {diagnosis.report_text}
-                                </div>
-                                <div style={{ marginTop: 8 }}>
-                                  <Text type="secondary" style={{ fontSize: '11px' }}>
-                                    Lead: {diagnosis.lead_name} | Processing Time: {diagnosis.processing_time_seconds}s
-                                  </Text>
-                                </div>
-                              </Card>
+                            </div>
+                          </div>
+                        </Card>
 
-                              {/* Metrics */}
-                              <Card size="small" title="Key Metrics" style={{ flex: 1, minWidth: 200 }}>
-                                <Space direction="vertical" style={{ width: '100%' }}>
-                                  {Object.entries(diagnosis.metrics).map(([key, value]) => (
-                                    <div key={key} style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                      <span style={{ fontSize: '11px' }}>
-                                        {key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}:
-                                      </span>
-                                      <span style={{ fontWeight: 'bold', color: '#1890ff', fontSize: '11px' }}>
-                                        {typeof value === 'number' ? value.toFixed(3) : value}
-                                      </span>
+                        {/* Detailed Diagnoses */}
+                        {diagnosisData.diagnoses.map((diagnosis, index) => {
+                          const config = getDiseaseConfig(diagnosis.disease);
+                          return (
+                            <Card
+                              key={index}
+                              size="small"
+                              title={
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  <span>{config.icon}</span>
+                                  <span>{diagnosis.title}</span>
+                                  <Tag color={config.color} style={{ marginLeft: 'auto' }}>
+                                    {config.name}
+                                  </Tag>
+                                </div>
+                              }
+                              style={{ marginBottom: 16 }}
+                            >
+                              <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                                {/* Clinical Report */}
+                                <Card size="small" title="Clinical Report" style={{ flex: 2, minWidth: 300 }}>
+                                  <div style={{ fontSize: '12px', lineHeight: '1.5' }}>
+                                    {diagnosis.report_text}
+                                  </div>
+                                  <div style={{ marginTop: 8 }}>
+                                    <Text type="secondary" style={{ fontSize: '11px' }}>
+                                      Lead: {diagnosis.lead_name} | Processing Time: {diagnosis.processing_time_seconds}s
+                                    </Text>
+                                  </div>
+                                </Card>
+
+                                {/* Metrics */}
+                                <Card size="small" title="Key Metrics" style={{ flex: 1, minWidth: 200 }}>
+                                  <Space direction="vertical" style={{ width: '100%' }}>
+                                    {Object.entries(diagnosis.metrics).map(([key, value]) => (
+                                      <div key={key} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                        <span style={{ fontSize: '11px' }}>
+                                          {key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}:
+                                        </span>
+                                        <span style={{ fontWeight: 'bold', color: '#1890ff', fontSize: '11px' }}>
+                                          {typeof value === 'number' ? value.toFixed(3) : value}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </Space>
+                                </Card>
+
+                                {/* Confidence */}
+                                <Card size="small" title="AI Confidence" style={{ flex: 1, minWidth: 150 }}>
+                                  <div style={{ textAlign: 'center' }}>
+                                    <div style={{ fontSize: '20px', fontWeight: 'bold', color: config.color }}>
+                                      {diagnosis.confidence}%
                                     </div>
-                                  ))}
+                                    <div style={{ fontSize: '10px', color: '#666', marginBottom: 8 }}>
+                                      {diagnosis.confidence >= 90 ? 'Very High' :
+                                        diagnosis.confidence >= 80 ? 'High' :
+                                          diagnosis.confidence >= 70 ? 'Medium' : 'Low'} Confidence
+                                    </div>
+                                    <Progress
+                                      percent={diagnosis.confidence}
+                                      size="small"
+                                      strokeColor={config.color}
+                                      showInfo={false}
+                                    />
+                                  </div>
+                                </Card>
+                              </div>
+
+                              {/* Action Buttons */}
+                              <div style={{ marginTop: 16, textAlign: 'center' }}>
+                                <Space>
+                                  <Button
+                                    type="primary"
+                                    icon={<ExperimentOutlined />}
+                                    size="small"
+                                    onClick={() => requestXAIInterpretation(diagnosis.instance_id, [diagnosis.disease])}
+                                  >
+                                    View XAI Analysis
+                                  </Button>
+                                  <Button
+                                    type="default"
+                                    icon={<BarChartOutlined />}
+                                    size="small"
+                                    onClick={() => navigate(`/ecg-view/${file.user_id}/${diagnosis.instance_id}`)}
+                                  >
+                                    View Waveform
+                                  </Button>
+                                  <Button
+                                    type="default"
+                                    icon={<FileTextOutlined />}
+                                    size="small"
+                                  >
+                                    Download Report
+                                  </Button>
                                 </Space>
-                              </Card>
-
-                              {/* Confidence */}
-                              <Card size="small" title="AI Confidence" style={{ flex: 1, minWidth: 150 }}>
-                                <div style={{ textAlign: 'center' }}>
-                                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: config.color }}>
-                                    {diagnosis.confidence}%
-                                  </div>
-                                  <div style={{ fontSize: '10px', color: '#666', marginBottom: 8 }}>
-                                    {diagnosis.confidence >= 90 ? 'Very High' : 
-                                     diagnosis.confidence >= 80 ? 'High' : 
-                                     diagnosis.confidence >= 70 ? 'Medium' : 'Low'} Confidence
-                                  </div>
-                                  <Progress 
-                                    percent={diagnosis.confidence} 
-                                    size="small" 
-                                    strokeColor={config.color}
-                                    showInfo={false}
-                                  />
-                                </div>
-                              </Card>
-                            </div>
-
-                            {/* Action Buttons */}
-                            <div style={{ marginTop: 16, textAlign: 'center' }}>
-                              <Space>
-                                                                 <Button 
-                                   type="primary"
-                                   icon={<ExperimentOutlined />}
-                                   size="small"
-                                   onClick={() => requestXAIInterpretation(diagnosis.instance_id, [diagnosis.disease])}
-                                 >
-                                   View XAI Analysis
-                                 </Button>
-                                <Button 
-                                  type="default"
-                                  icon={<BarChartOutlined />}
-                                  size="small"
-                                  onClick={() => navigate(`/ecg-view/${file.user_id}/${diagnosis.instance_id}`)}
-                                >
-                                  View Waveform
-                                </Button>
-                                <Button 
-                                  type="default"
-                                  icon={<FileTextOutlined />}
-                                  size="small"
-                                >
-                                  Download Report
-                                </Button>
-                              </Space>
-                            </div>
-                          </Card>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-                      <div style={{ fontSize: '16px', color: '#666', marginBottom: 16 }}>
-                        No AI diagnosis available for this ECG file
+                              </div>
+                            </Card>
+                          );
+                        })}
                       </div>
-                      <Button 
-                        type="primary"
-                        icon={<ExperimentOutlined />}
-                        onClick={() => requestAiDiagnosis(instanceId)}
-                        loading={diagnosisLoading[instanceId]}
-                      >
-                        Generate AI Diagnosis
-                      </Button>
-                    </div>
-                  )}
-                </Card>
-              </List.Item>
-            );
-          }}
-        />
-      </Card>
+                    ) : (
+                      <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+                        <div style={{ fontSize: '16px', color: '#666', marginBottom: 16 }}>
+                          No AI diagnosis available for this ECG file
+                        </div>
+                        <Button
+                          type="primary"
+                          icon={<ExperimentOutlined />}
+                          onClick={() => requestAiDiagnosis(instanceId)}
+                          loading={diagnosisLoading[instanceId]}
+                        >
+                          Generate AI Diagnosis
+                        </Button>
+                      </div>
+                    )}
+                  </Card>
+                </List.Item>
+              );
+            }}
+          />
+        </Card>
+      )}
 
       <Modal
         title="Edit Patient Information"

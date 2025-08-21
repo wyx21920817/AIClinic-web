@@ -1,0 +1,10 @@
+warning: in the working copy of 'build/asset-manifest.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'build/static/css/main.a5244daa.css', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/ECGViewer.js', LF will be replaced by CRLF the next time Git touches it
+build/asset-manifest.json
+build/index.html
+build/static/css/main.a5244daa.css.map
+build/static/js/main.cc89792a.js
+build/static/js/main.cc89792a.js.LICENSE.txt
+build/static/js/main.cc89792a.js.map
+src/components/ECGViewer.js
