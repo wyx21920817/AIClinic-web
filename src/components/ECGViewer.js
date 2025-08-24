@@ -534,15 +534,17 @@ const ECGViewer = () => {
             title={
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span>AI Diagnosis Result</span>
-                <Button
-                  type="primary"
-                  size="middle"
-                  onClick={handleGetDiagnosis}
-                  loading={isDiagnosing}
-                  style={{ marginLeft: '12px' }}
-                >
-                  Update Diagnose
-                </Button>
+                {!dicomTags['x00104000'] && (
+                  <Button
+                    type="primary"
+                    size="middle"
+                    onClick={handleGetDiagnosis}
+                    loading={isDiagnosing}
+                    style={{ marginLeft: '12px' }}
+                  >
+                    Update Diagnose
+                  </Button>
+                )}
               </div>
             }
             style={{ marginTop: '20px' }}
