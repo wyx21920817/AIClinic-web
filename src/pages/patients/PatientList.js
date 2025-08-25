@@ -207,7 +207,35 @@ const PatientList = () => {
       message.success('Patient deleted successfully');
       fetchPatients();
     } catch (error) {
-      message.error('Failed to delete patient');
+      console.error('Delete patient error:', error);
+
+      // Check for specific relationship error
+      if (error.response?.data?.detail) {
+        const errorDetail = error.response.data.detail;
+
+        if (errorDetail.includes('Cannot delete patient') && errorDetail.includes('doctors still have a relationship')) {
+          // Show specific message for relationship error
+          Modal.error({
+            title: 'Cannot Delete Patient',
+            content: (
+              <div>
+                <p style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
+                  {errorDetail}
+                </p>
+              </div>
+            ),
+            okText: 'OK',
+            width: 500
+          });
+        } else {
+          // Show other error messages
+          message.error(errorDetail || 'Failed to delete patient');
+        }
+      } else if (error.message) {
+        message.error(error.message);
+      } else {
+        message.error('Failed to delete patient');
+      }
     }
   };
 
