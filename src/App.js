@@ -17,6 +17,7 @@ import TestDeliverables from './pages/TestDeliverables';
 import SimpleTest from './pages/SimpleTest';
 import AIEngineShowcase from './pages/AIEngineShowcase';
 import XAIDemo from './pages/XAIDemo';
+import XAIResultPage from './pages/XAIResultPage';
 import AuditLogsEnhanced from './pages/AuditLogsEnhanced';
 // import AIECGResultsDemo from './pages/AIECGResultsDemo';
 import RoleTest from './pages/RoleTest';
@@ -53,6 +54,8 @@ function App() {
             <Route path="simple-test" element={<SimpleTest />} />
             <Route path="ai-engine-showcase" element={<AIEngineShowcase />} />
             <Route path="xai-demo" element={<XAIDemo />} />
+            <Route path="xai/:instanceId" element={<XAIResultPage />} />
+            <Route path="xai/patient/:patientId" element={<XAIResultPage />} />
             <Route path="role-test" element={<RoleTest />} />
             <Route path="api-test" element={<APITest />} />
             <Route path="doctor-home" element={<PrivateRoute allowedRoles={['doctor']} />}>

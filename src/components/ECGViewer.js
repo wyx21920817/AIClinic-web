@@ -6,7 +6,7 @@ import {
 } from 'ecg-dicom-web-viewer';
 import dicomParser from 'dicom-parser';
 import ReadECG from '../utils/ReadECG';
-import { Card, Space, Typography, Upload, Progress, Row, Col, Button, message } from 'antd';
+import { Card, Space, Typography, Upload, Progress, Row, Col, Button, message, Modal, Descriptions, Tag, Alert, Select } from 'antd';
 import { InboxOutlined, FileImageOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import request from '../services/api/request';
 import { API_ENDPOINTS, API_BASE_URL } from '../services/api/config';
@@ -89,9 +89,78 @@ const ECGViewer = () => {
   const [convertedDicomUrl, setConvertedDicomUrl] = React.useState(null);
   const [dicomTags, setDicomTags] = React.useState(null);
   const [isDiagnosing, setIsDiagnosing] = React.useState(false);
+  const [isXaiLoading, setIsXaiLoading] = React.useState(false);
+  const [xaiSelectOpen, setXaiSelectOpen] = React.useState(false);
+  const [selectedDiseases, setSelectedDiseases] = React.useState([]);
+  const [xaiResult, setXaiResult] = React.useState(null);
   const statusCheckIntervalRef = React.useRef(null);
   const viewerRef = React.useRef(null);
   const containerId = 'ecg-container';
+  const KNOWN_DISEASES = [
+    'NORM', '1dAVB', '2dAVB', '3dAVB', 'AFIB', 'AFLT', 'LBBB', 'RBBB', 'STACH', 'PAC', 'PVC', 'ST'
+  ];
+
+  const extractDiseasesFromDicom = React.useCallback(() => {
+    try {
+      const raw = dicomTags?.['x00104000'];
+      if (!raw || typeof raw !== 'string') return [];
+      const parts = raw.split(' | ');
+      const candidates = [];
+      parts.forEach(p => {
+        const items = p.replace('ResNet Top5: ', '').split('; ');
+        items.forEach(it => {
+          const [type] = it.split(':');
+          if (type) {
+            const t = type.trim();
+            if (KNOWN_DISEASES.includes(t)) candidates.push(t);
+          }
+        });
+      });
+      return Array.from(new Set(candidates)).slice(0, 3);
+    } catch {
+      return [];
+    }
+  }, [dicomTags]);
+
+  const handleViewXAI = async () => {
+    setIsXaiLoading(true);
+    try {
+      const defaults = extractDiseasesFromDicom();
+      if (defaults.length > 0) {
+        const params = new URLSearchParams();
+        defaults.forEach(d => params.append('d', d));
+        navigate(`/xai/${instanceId}?${params.toString()}`);
+      } else {
+        setSelectedDiseases([]);
+        setXaiSelectOpen(true);
+      }
+    } finally {
+      setIsXaiLoading(false);
+    }
+  };
+
+  const handleConfirmXAI = () => {
+    const diseases = (selectedDiseases && selectedDiseases.length > 0) ? selectedDiseases : [];
+    if (diseases.length === 0) {
+      message.error('Please select at least one abnormality');
+      return;
+    }
+    const params = new URLSearchParams();
+    diseases.forEach(d => params.append('d', d));
+    setXaiSelectOpen(false);
+    navigate(`/xai/${instanceId}?${params.toString()}`);
+  };
+
+  const runXAIFor = (disease) => {
+    const d = String(disease || '').trim();
+    if (!d) {
+      message.error('Invalid abnormality');
+      return;
+    }
+    const params = new URLSearchParams();
+    params.append('d', d);
+    navigate(`/xai/${instanceId}?${params.toString()}`);
+  };
 
   React.useEffect(() => {
     const loadInstanceFromOrthanc = async () => {
@@ -534,15 +603,20 @@ const ECGViewer = () => {
             title={
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span>AI Diagnosis Result</span>
-                <Button
-                  type="primary"
-                  size="middle"
-                  onClick={handleGetDiagnosis}
-                  loading={isDiagnosing}
-                  style={{ marginLeft: '12px' }}
-                >
-                  Update Diagnose
-                </Button>
+                <div>
+                  <Button
+                    type="primary"
+                    size="middle"
+                    onClick={handleGetDiagnosis}
+                    loading={isDiagnosing}
+                    style={{ marginLeft: '12px' }}
+                  >
+                    Update Diagnose
+                  </Button>
+                  <Button size="middle" onClick={handleViewXAI} loading={isXaiLoading} style={{ marginLeft: 8 }}>
+                    View XAI
+                  </Button>
+                </div>
               </div>
             }
             style={{ marginTop: '20px' }}
@@ -556,6 +630,7 @@ const ECGViewer = () => {
                         <tr>
                           <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Type</th>
                           <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Probability</th>
+                          <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}></th>
                         </tr>
                       </thead>
                       <tbody>
@@ -566,6 +641,9 @@ const ECGViewer = () => {
                               <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>{type}</td>
                               <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
                                 {(parseFloat(prob) * 100).toFixed(1)}%
+                              </td>
+                              <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'right' }}>
+                                <Button size="small" onClick={() => runXAIFor(type)}>View XAI</Button>
                               </td>
                             </tr>
                           );
@@ -581,6 +659,7 @@ const ECGViewer = () => {
                         <tr>
                           <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Type</th>
                           <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Probability</th>
+                          <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}></th>
                         </tr>
                       </thead>
                       <tbody>
@@ -591,6 +670,9 @@ const ECGViewer = () => {
                               <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>{type}</td>
                               <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
                                 {(parseFloat(prob) * 100).toFixed(1)}%
+                              </td>
+                              <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'right' }}>
+                                <Button size="small" onClick={() => runXAIFor(type)}>View XAI</Button>
                               </td>
                             </tr>
                           );
@@ -644,6 +726,26 @@ const ECGViewer = () => {
             </div>
           </Card>
         )}
+
+        <Modal
+          title="Select diseases for XAI"
+          open={xaiSelectOpen}
+          onCancel={() => setXaiSelectOpen(false)}
+          onOk={handleConfirmXAI}
+          okText="View XAI"
+        >
+          <Space direction="vertical" style={{ width: '100%' }}>
+            <div>Select one or more suspected abnormalities to generate XAI:</div>
+            <Select
+              mode="multiple"
+              value={selectedDiseases}
+              onChange={setSelectedDiseases}
+              placeholder="Select diseases"
+              style={{ width: '100%' }}
+              options={KNOWN_DISEASES.map(d => ({ label: d, value: d }))}
+            />
+          </Space>
+        </Modal>
       </Space>
     </Card>
   );

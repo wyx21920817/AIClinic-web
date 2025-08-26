@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Descriptions, Button, Space, Upload, List, Tag, message, Modal, Form, Input, Select, DatePicker, Progress, Typography } from 'antd';
+import { Card, Descriptions, Button, Space, Upload, List, Tag, message, Modal, Form, Input, Select, DatePicker, Progress, Typography, Tooltip } from 'antd';
 import { useParams, useNavigate } from 'react-router-dom';
-import { UploadOutlined, EditOutlined, DeleteOutlined, ExperimentOutlined, BarChartOutlined, FileTextOutlined } from '@ant-design/icons';
+import { UploadOutlined, EditOutlined, DeleteOutlined, ExperimentOutlined, BarChartOutlined, FileTextOutlined, EyeOutlined, CopyOutlined } from '@ant-design/icons';
 import styled from '@emotion/styled';
 import { patientsApi } from '../../services/api/patients';
 import { aiDiagnosisAPI } from '../../services/api/ecg';
@@ -43,6 +43,9 @@ const PatientDetail = () => {
   const [fileModalVisible, setFileModalVisible] = useState(false);
   const [aiDiagnosis, setAiDiagnosis] = useState({});
   const [diagnosisLoading, setDiagnosisLoading] = useState({});
+  const [xaiSelectOpen, setXaiSelectOpen] = useState(false);
+  const [selectedDiseases, setSelectedDiseases] = useState([]);
+  const [selectedInstanceId, setSelectedInstanceId] = useState(null);
 
   const fetchPatient = async () => {
     try {
@@ -285,13 +288,49 @@ const PatientDetail = () => {
 
       console.log('XAI Interpretation response:', response);
 
-      // Navigate to XAI demo with the results
-      navigate(`/xai-demo?instanceId=${instanceId}&diseases=${diseases.join(',')}&xaiData=${encodeURIComponent(JSON.stringify(response))}`);
+      // Navigate to dedicated XAI results page for this instance, passing selected diseases
+      const params = new URLSearchParams();
+      diseases.forEach(d => params.append('d', d));
+      navigate(`/xai/${instanceId}?${params.toString()}`);
 
       message.success('XAI interpretation completed!');
     } catch (error) {
       console.error('Error requesting XAI interpretation:', error);
       message.error('Failed to generate XAI interpretation');
+    }
+  };
+
+  const KNOWN_DISEASES = [
+    'NORM', '1dAVB', '2dAVB', '3dAVB', 'AFIB', 'AFLT', 'LBBB', 'RBBB', 'STACH', 'PAC', 'PVC', 'ST'
+  ];
+
+  const openXaiSelector = (instanceId) => {
+    setSelectedInstanceId(instanceId);
+    const diagnosis = aiDiagnosis[instanceId];
+    const defaults = Array.isArray(diagnosis?.diagnoses)
+      ? Array.from(new Set(diagnosis.diagnoses.map(d => d.disease).filter(Boolean))).slice(0, 3)
+      : [];
+    if (defaults.length > 0) {
+      const params = new URLSearchParams();
+      defaults.forEach(d => params.append('d', d));
+      navigate(`/xai/${instanceId}?${params.toString()}`);
+    } else {
+      setSelectedDiseases([]);
+      setXaiSelectOpen(true);
+    }
+  };
+
+  const confirmXaiSelector = () => {
+    const diseases = (selectedDiseases && selectedDiseases.length > 0) ? selectedDiseases : [];
+    if (diseases.length === 0) {
+      message.error('Please select at least one abnormality');
+      return;
+    }
+    const params = new URLSearchParams();
+    diseases.forEach(d => params.append('d', d));
+    setXaiSelectOpen(false);
+    if (selectedInstanceId) {
+      navigate(`/xai/${selectedInstanceId}?${params.toString()}`);
     }
   };
 
@@ -332,7 +371,7 @@ const PatientDetail = () => {
           "risk_level": "high"
         },
         {
-          "title": "Atrial Fibrillation (00001_lr.dcm)",
+          "title": "Atrial Flutter (00001_lr.dcm)",
           "lead_name": "II",
           "report_text": "P-waves typically absent/fibrillatory. Yellow boxes: Inferred P-wave regions. RR histogram shows 'irregularly irregular' rhythm.",
           "metrics": {
@@ -340,10 +379,10 @@ const PatientDetail = () => {
             "p_wave_absence": 0.92,
             "irregular_rhythm": 0.88
           },
-          "image_paths": ["/static/ecg_analysis_results/00001_lr_AF/af_rhythm_analysis.png"],
+          "image_paths": ["/static/ecg_analysis_results/00001_lr_AFLT/aflt_rhythm_analysis.png"],
           "processing_time_seconds": 2.1,
           "instance_id": "111111111111111111111",
-          "disease": "AF",
+          "disease": "AFLT",
           "confidence": 87,
           "risk_level": "medium"
         }
@@ -418,7 +457,6 @@ const PatientDetail = () => {
     "1dAVB": { name: "First-degree AV Block", color: "#faad14", icon: "🟡", risk: "medium" },
     "2dAVB": { name: "Second-degree AV Block", color: "#ff7a45", icon: "🟠", risk: "high" },
     "3dAVB": { name: "Third-degree AV Block", color: "#ff4d4f", icon: "🔴", risk: "critical" },
-    "AF": { name: "Atrial Fibrillation", color: "#ff7a45", icon: "🟠", risk: "high" },
     "AFIB": { name: "Atrial Fibrillation", color: "#ff7a45", icon: "🟠", risk: "high" },
     "AFLT": { name: "Atrial Flutter", color: "#ff7a45", icon: "🟠", risk: "high" },
     "LBBB": { name: "Left Bundle Branch Block", color: "#ff4d4f", icon: "🔴", risk: "high" },
@@ -544,16 +582,41 @@ const PatientDetail = () => {
                       bordered
                       dataSource={file.instanceIDs || []}
                       renderItem={(instanceId) => (
-                        <List.Item>
-                          <Button
-                            type="link"
-                            onClick={() => {
-                              navigate(`/ecg-view/${file.user_id}/${instanceId}`);
-                            }}
-                            style={{ padding: 0 }}
-                          >
-                            {instanceId}
-                          </Button>
+                        <List.Item
+                          actions={[
+                            <Tooltip key="copy" title="Copy Instance ID">
+                              <Button
+                                type="text"
+                                icon={<CopyOutlined />}
+                                onClick={() => {
+                                  navigator.clipboard.writeText(instanceId);
+                                  message.success('Instance ID copied');
+                                }}
+                              />
+                            </Tooltip>,
+                            <Tooltip key="view" title="View ECG waveform">
+                              <Button
+                                type="text"
+                                icon={<EyeOutlined />}
+                                onClick={() => navigate(`/ecg-view/${file.user_id}/${instanceId}`)}
+                              />
+                            </Tooltip>,
+                            <Tooltip key="xai" title="View XAI analysis">
+                              <Button
+                                type="text"
+                                icon={<ExperimentOutlined />}
+                                onClick={() => openXaiSelector(instanceId)}
+                              />
+                            </Tooltip>
+                          ]}
+                        >
+                          <Tooltip title={instanceId}>
+                            <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace' }}>
+                              <span style={{ background: '#f5f5f5', padding: '2px 6px', borderRadius: 4 }}>
+                                {instanceId.length > 12 ? `${instanceId.slice(0, 6)}…${instanceId.slice(-6)}` : instanceId}
+                              </span>
+                            </span>
+                          </Tooltip>
                         </List.Item>
                       )}
                       style={{ maxHeight: '200px', overflow: 'auto' }}
@@ -605,7 +668,7 @@ const PatientDetail = () => {
                         <Button
                           type="default"
                           size="small"
-                          onClick={() => navigate(`/xai-demo?instanceId=${instanceId}`)}
+                          onClick={() => navigate(`/xai/${instanceId}`)}
                         >
                           🧠 View XAI
                         </Button>
@@ -825,6 +888,26 @@ const PatientDetail = () => {
             </Space>
           </Form.Item>
         </Form>
+      </Modal>
+
+      <Modal
+        title="Select diseases for XAI"
+        open={xaiSelectOpen}
+        onCancel={() => setXaiSelectOpen(false)}
+        onOk={confirmXaiSelector}
+        okText="View XAI"
+      >
+        <Space direction="vertical" style={{ width: '100%' }}>
+          <div>Select one or more suspected abnormalities to generate XAI:</div>
+          <Select
+            mode="multiple"
+            value={selectedDiseases}
+            onChange={setSelectedDiseases}
+            placeholder="Select diseases"
+            style={{ width: '100%' }}
+            options={KNOWN_DISEASES.map(d => ({ label: d, value: d }))}
+          />
+        </Space>
       </Modal>
 
       <Modal

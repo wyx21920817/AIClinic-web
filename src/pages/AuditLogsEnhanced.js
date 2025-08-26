@@ -18,7 +18,9 @@ import {
   Descriptions,
   message,
   Switch,
-  Statistic
+  Statistic,
+  Avatar,
+  Empty
 } from 'antd';
 import {
   SearchOutlined,
@@ -34,6 +36,8 @@ import {
   SettingOutlined,
   LockOutlined
 } from '@ant-design/icons';
+import { auditAPI } from '../services/api/audit';
+import request from '../services/api/request';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -54,6 +58,8 @@ const AuditLogsEnhanced = () => {
   });
   const [selectedLog, setSelectedLog] = useState(null);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
+  const [users, setUsers] = useState({});
+  const [loadingUsers, setLoadingUsers] = useState(false);
 
   // Enhanced mock data based on Confluence audit log categories
   const mockAuditLogs = [
@@ -132,57 +138,82 @@ const AuditLogsEnhanced = () => {
   const fetchAuditLogs = useCallback(async () => {
     setLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
+      const params = {
+        page: pagination.current,
+        page_size: pagination.pageSize
+      };
+      if (filters.action) params.action = filters.action;
+      if (filters.resourceType) params.resource_type = filters.resourceType;
+      if (filters.searchText) params.search_text = filters.searchText;
 
-      let filteredLogs = [...mockAuditLogs];
-      
-      if (filters.action) {
-        filteredLogs = filteredLogs.filter(log => log.action === filters.action);
+      const response = await auditAPI.getAuditLogs(params);
+
+      let items = [];
+      let total = 0;
+      if (response && response.items) {
+        items = response.items;
+        total = response.pagination?.total || response.items.length;
+      } else if (Array.isArray(response)) {
+        items = response;
+        total = response.length;
+      } else {
+        // Fallback to mock if API unavailable
+        items = [...mockAuditLogs];
+        total = items.length;
       }
-      
-      if (filters.resourceType) {
-        filteredLogs = filteredLogs.filter(log => log.resource_type === filters.resourceType);
-      }
-      
-      if (filters.searchText) {
-        const searchLower = filters.searchText.toLowerCase();
-        filteredLogs = filteredLogs.filter(log => 
-          log.username.toLowerCase().includes(searchLower) ||
-          log.details.toLowerCase().includes(searchLower) ||
-          log.action.toLowerCase().includes(searchLower)
-        );
-      }
 
-      if (filters.showAdminKey) {
-        filteredLogs = filteredLogs.filter(log => log.admin_key_used);
-      }
+      const normalized = items.map(log => {
+        const u = users[log.user_id];
+        return {
+          ...log,
+          admin_key_used: Boolean(log.admin_key_used),
+          severity: log.status === 'failure' ? 'error' : (log.severity || 'info'),
+          realUsername: u?.username || log.username,
+          userEmail: u?.email,
+          userRole: u?.role,
+          userFullName: u?.fullName
+        };
+      });
 
-      const startIndex = (pagination.current - 1) * pagination.pageSize;
-      const endIndex = startIndex + pagination.pageSize;
-      const paginatedLogs = filteredLogs.slice(startIndex, endIndex);
-
-      setAuditLogs(paginatedLogs);
-      setPagination(prev => ({
-        ...prev,
-        total: filteredLogs.length
-      }));
-
-      message.success(`Loaded ${filteredLogs.length} audit log entries`);
+      setAuditLogs(normalized);
+      setPagination(prev => ({ ...prev, total }));
+      message.success(`Loaded ${normalized.length} audit log entries`);
     } catch (error) {
       console.error('Error fetching audit logs:', error);
+      // Graceful fallback
       setAuditLogs(mockAuditLogs);
-      setPagination(prev => ({
-        ...prev,
-        total: mockAuditLogs.length
-      }));
+      setPagination(prev => ({ ...prev, total: mockAuditLogs.length }));
+      message.warning('Showing demo data (audit API unavailable)');
     } finally {
       setLoading(false);
     }
-  }, [filters, pagination.current, pagination.pageSize]);
+  }, [filters, pagination.current, pagination.pageSize, users]);
 
   useEffect(() => {
     fetchAuditLogs();
   }, [fetchAuditLogs]);
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        setLoadingUsers(true);
+        const resp = await request.get('/api/users?page_size=200');
+        const list = resp.items || resp || [];
+        const map = {};
+        (list || []).forEach(u => {
+          if (u?.id) {
+            map[u.id] = { username: u.username, email: u.email, role: u.role, fullName: u.full_name || u.fullName };
+          }
+        });
+        setUsers(map);
+      } catch (e) {
+        // ignore, user enrichment is best-effort
+      } finally {
+        setLoadingUsers(false);
+      }
+    };
+    fetchUsers();
+  }, []);
 
   const handleTableChange = (paginationInfo) => {
     setPagination(prev => ({
@@ -247,39 +278,75 @@ const AuditLogsEnhanced = () => {
     return icons[resourceType] || <DatabaseOutlined />;
   };
 
-  const exportAuditLogs = () => {
-    const csvContent = [
-      ['Timestamp', 'User', 'Action', 'Resource Type', 'Resource ID', 'Details', 'Admin Key Used', 'Severity'],
-      ...auditLogs.map(log => [
-        new Date(log.timestamp).toLocaleString(),
-        log.username,
-        log.action,
-        log.resource_type,
-        log.resource_id,
-        log.details,
+  const exportAuditLogs = async () => {
+    try {
+      const params = { page: 1, page_size: 1000 };
+      if (filters.action) params.action = filters.action;
+      if (filters.resourceType) params.resource_type = filters.resourceType;
+      if (filters.searchText) params.search_text = filters.searchText;
+
+      const response = await auditAPI.getAuditLogs(params);
+      const items = (response && response.items) ? response.items : auditLogs;
+
+      const header = ['Timestamp','User','Action','Resource Type','Resource ID','Details','Admin Key Used','Severity'];
+      const rows = items.map(log => [
+        new Date(log.timestamp).toLocaleString('en-AU', { timeZone: 'Australia/Perth' }),
+        log.username || '',
+        log.action || '',
+        log.resource_type || '',
+        log.resource_id || '',
+        (log.details || '').toString().replace(/\n/g, ' '),
         log.admin_key_used ? 'Yes' : 'No',
-        log.severity
-      ])
-    ].map(row => row.join(',')).join('\n');
+        (log.status === 'failure' ? 'error' : (log.severity || 'info')).toUpperCase()
+      ]);
+      const csvContent = [header, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
 
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `audit_logs_${new Date().toISOString().split('T')[0]}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-
-    message.success('Audit logs exported successfully');
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `audit_logs_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      message.success('Audit logs exported successfully');
+    } catch (e) {
+      console.error('Export failed, falling back to current view:', e);
+      try {
+        const header = ['Timestamp','User','Action','Resource Type','Resource ID','Details','Admin Key Used','Severity'];
+        const rows = auditLogs.map(log => [
+          new Date(log.timestamp).toLocaleString('en-AU', { timeZone: 'Australia/Perth' }),
+          log.username || '',
+          log.action || '',
+          log.resource_type || '',
+          log.resource_id || '',
+          (log.details || '').toString().replace(/\n/g, ' '),
+          log.admin_key_used ? 'Yes' : 'No',
+          (log.status === 'failure' ? 'error' : (log.severity || 'info')).toUpperCase()
+        ]);
+        const csvContent = [header, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `audit_logs_${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        message.success('Exported current page');
+      } catch (err) {
+        message.error('Export failed');
+      }
+    }
   };
 
   const stats = {
-    total: mockAuditLogs.length,
-    adminKey: mockAuditLogs.filter(log => log.admin_key_used).length,
-    warnings: mockAuditLogs.filter(log => log.severity === 'warning').length,
-    errors: mockAuditLogs.filter(log => log.severity === 'error').length
+    total: pagination.total,
+    adminKey: auditLogs.filter(log => log.admin_key_used).length,
+    warnings: auditLogs.filter(log => log.severity === 'warning').length,
+    errors: auditLogs.filter(log => log.severity === 'error').length
   };
 
   const columns = [
@@ -288,28 +355,60 @@ const AuditLogsEnhanced = () => {
       dataIndex: 'timestamp',
       key: 'timestamp',
       width: 180,
-      render: (timestamp) => (
-        <Text type="secondary">
-          {new Date(timestamp).toLocaleString()}
-        </Text>
-      )
+      render: (timestamp) => {
+        const perth = new Date(timestamp).toLocaleString('en-AU', { timeZone: 'Australia/Perth' });
+        return (
+          <Text type="secondary">{perth}</Text>
+        );
+      }
     },
     {
       title: 'User',
       dataIndex: 'username',
       key: 'username',
-      width: 120,
-      render: (username, record) => (
-        <Space>
-          <UserOutlined />
-          <Text>{username || 'System'}</Text>
-          {record.admin_key_used && (
-            <Tooltip title="Admin key used">
-              <LockOutlined style={{ color: '#ff4d4f' }} />
-            </Tooltip>
-          )}
-        </Space>
-      )
+      width: 200,
+      render: (username, record) => {
+        const name = record.realUsername || username || 'System';
+        const initial = name.charAt(0).toUpperCase();
+        const avatarColor = name === 'System' ? '#595959' : '#1890ff';
+        return (
+          <Space>
+            <Avatar size={24} style={{ backgroundColor: avatarColor }}>{initial}</Avatar>
+            <div>
+              <div>
+                <Text strong>{name}</Text>
+                {record.userRole && (
+                  <Tag color={record.userRole === 'admin' ? 'red' : 'green'} style={{ marginLeft: 6 }}>
+                    {record.userRole.toUpperCase()}
+                  </Tag>
+                )}
+              </div>
+              {record.userFullName && (
+                <div>
+                  <Text type="secondary" style={{ fontSize: 11 }}>{record.userFullName}</Text>
+                </div>
+              )}
+              {record.userEmail && (
+                <div>
+                  <a href={`mailto:${record.userEmail}`}>
+                    <Text type="secondary" style={{ fontSize: 11 }}>{record.userEmail}</Text>
+                  </a>
+                </div>
+              )}
+              {record.user_id && (
+                <div>
+                  <Text type="secondary" style={{ fontSize: 10 }}>ID: {record.user_id.length > 8 ? record.user_id.slice(-8) : record.user_id}</Text>
+                </div>
+              )}
+            </div>
+            {record.admin_key_used && (
+              <Tooltip title="Admin key used">
+                <LockOutlined style={{ color: '#ff4d4f' }} />
+              </Tooltip>
+            )}
+          </Space>
+        );
+      }
     },
     {
       title: 'Action',
@@ -345,7 +444,7 @@ const AuditLogsEnhanced = () => {
       render: (details, record) => (
         <Space direction="vertical" size="small">
           <Tooltip title={details}>
-            <Text ellipsis style={{ maxWidth: 200 }}>
+            <Text ellipsis style={{ maxWidth: 280 }}>
               {details || 'No details'}
             </Text>
           </Tooltip>
@@ -354,6 +453,17 @@ const AuditLogsEnhanced = () => {
           </Tag>
         </Space>
       )
+    },
+    {
+      title: 'Status',
+      dataIndex: 'status',
+      key: 'status',
+      width: 110,
+      render: (status) => {
+        const s = (status || '').toLowerCase();
+        const color = s === 'success' ? 'green' : s === 'failure' ? 'red' : 'gold';
+        return <Tag color={color}>{(status || 'success').toUpperCase()}</Tag>;
+      }
     },
     {
       title: 'Actions',
@@ -427,6 +537,9 @@ const AuditLogsEnhanced = () => {
             <Text type="secondary">
               Monitor and manage activity in the AI Clinic system
             </Text>
+            <div style={{ marginTop: 4 }}>
+              <Tag color="geekblue">Australia/Perth</Tag>
+            </div>
           </Col>
           <Col>
             <Space>
@@ -518,6 +631,8 @@ const AuditLogsEnhanced = () => {
           dataSource={auditLogs}
           rowKey="id"
           loading={loading}
+          size="middle"
+          bordered
           pagination={{
             current: pagination.current,
             pageSize: pagination.pageSize,
@@ -529,7 +644,13 @@ const AuditLogsEnhanced = () => {
             pageSizeOptions: ['10', '20', '50', '100']
           }}
           onChange={handleTableChange}
-          scroll={{ x: 1200 }}
+          scroll={{ x: 1200, y: 480 }}
+          onRow={(_, index) => ({
+            style: { backgroundColor: index % 2 === 0 ? '#ffffff' : '#fafafa' }
+          })}
+          locale={{
+            emptyText: <Empty description="No audit events found" />
+          }}
         />
       </Card>
 
@@ -541,7 +662,7 @@ const AuditLogsEnhanced = () => {
             <span>Audit Log Details</span>
           </Space>
         }
-        visible={detailModalVisible}
+        open={detailModalVisible}
         onCancel={() => setDetailModalVisible(false)}
         footer={[
           <Button key="close" onClick={() => setDetailModalVisible(false)}>
@@ -553,7 +674,7 @@ const AuditLogsEnhanced = () => {
         {selectedLog && (
           <Descriptions bordered column={2}>
             <Descriptions.Item label="Timestamp" span={2}>
-              {new Date(selectedLog.timestamp).toLocaleString()}
+              {new Date(selectedLog.timestamp).toLocaleString('en-AU', { timeZone: 'Australia/Perth' })}
             </Descriptions.Item>
             <Descriptions.Item label="User ID">
               {selectedLog.user_id}
@@ -568,6 +689,16 @@ const AuditLogsEnhanced = () => {
                 )}
               </Space>
             </Descriptions.Item>
+            {selectedLog.userFullName && (
+              <Descriptions.Item label="Full Name">
+                {selectedLog.userFullName}
+              </Descriptions.Item>
+            )}
+            {selectedLog.userEmail && (
+              <Descriptions.Item label="Email">
+                {selectedLog.userEmail}
+              </Descriptions.Item>
+            )}
             <Descriptions.Item label="Action">
               <Tag color={getActionColor(selectedLog.action)}>
                 {selectedLog.action.replace('_', ' ').toUpperCase()}
