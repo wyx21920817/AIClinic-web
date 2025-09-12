@@ -15,8 +15,8 @@ import Account from './pages/account/Account';
 import UserDetail from './pages/doctors/UserDetail';
 import SimpleTest from './pages/SimpleTest';
 import AIEngineShowcase from './pages/AIEngineShowcase';
-import XAIResultPage from './pages/XAIResultPage';
-import AuditLogs from './pages/AuditLogs';
+import XAIDemo from './pages/XAIDemo';
+import AuditLogsEnhanced from './pages/AuditLogsEnhanced';
 // import AIECGResultsDemo from './pages/AIECGResultsDemo';
 import RoleTest from './pages/RoleTest';
 import APITest from './pages/APITest';
@@ -49,9 +49,7 @@ function App() {
             {/* ECG AI Results Demo removed */}
             <Route path="simple-test" element={<SimpleTest />} />
             <Route path="ai-engine-showcase" element={<AIEngineShowcase />} />
-            {/* XAI demo route removed */}
-            <Route path="xai/:instanceId" element={<XAIResultPage />} />
-            <Route path="xai/patient/:patientId" element={<XAIResultPage />} />
+            <Route path="xai-demo" element={<XAIDemo />} />
             <Route path="role-test" element={<RoleTest />} />
             <Route path="api-test" element={<APITest />} />
             <Route path="doctor-home" element={<PrivateRoute allowedRoles={['doctor']} />}>

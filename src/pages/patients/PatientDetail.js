@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+
 import { Card, Descriptions, Button, Space, Upload, List, Tag, message, Modal, Form, Input, Select, DatePicker, Tooltip } from 'antd';
 import { useParams, useNavigate } from 'react-router-dom';
 import { UploadOutlined, EditOutlined, DeleteOutlined, CopyOutlined, UserOutlined, MailOutlined, IdcardOutlined, DatabaseOutlined, ClockCircleOutlined, NumberOutlined } from '@ant-design/icons';
+
 import styled from '@emotion/styled';
 import { patientsApi } from '../../services/api/patients';
 import { aiDiagnosisAPI } from '../../services/api/ecg';
@@ -314,6 +316,7 @@ const PatientDetail = () => {
 
       // Navigate to dedicated XAI results page for this instance, passing selected diseases
       const params = new URLSearchParams();
+
       normalized.forEach(d => params.append('d', d));
       // Labels removed from query per request
       navigate(`/xai/${instanceId}?${params.toString()}`);
@@ -326,12 +329,13 @@ const PatientDetail = () => {
   };
 
   const KNOWN_DISEASES = [
-    '1dAVB', 'RBBB', 'LBBB', 'SBRAD', 'AFIB', 'STACH', 'AFLT'
+
   ];
 
   const openXaiSelector = (instanceId) => {
     setSelectedInstanceId(instanceId);
     const diagnosis = aiDiagnosis[instanceId];
+
     // Prefer 1D model (original_dnn_model) results only for defaults
     const original = diagnosis?.summary?.original_response?.predictions?.original_dnn_model || {};
     const raw = Object.keys(original || {});
@@ -340,12 +344,14 @@ const PatientDetail = () => {
       const params = new URLSearchParams();
       defaults.forEach(d => params.append('d', d));
       // Do not append display labels
+
       navigate(`/xai/${instanceId}?${params.toString()}`);
     } else {
       setSelectedDiseases([]);
       setXaiSelectOpen(true);
     }
   };
+
 
   // Removed multi-instance selection; interpret operates on one instance at a time
 
@@ -367,6 +373,7 @@ const PatientDetail = () => {
       paramsAll.append('d', d);
     });
     window.location.href = `/xai/${selectedInstanceId}?${paramsAll.toString()}`;
+
   };
 
   const handleUpload = async (file) => {
@@ -693,30 +700,43 @@ const PatientDetail = () => {
                       bordered
                       dataSource={file.instanceIDs || []}
                       renderItem={(instanceId) => (
-                        <List.Item>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <Tooltip title={instanceId}>
-                              <Button
-                                type="link"
-                                onClick={() => navigate(`/ecg-view/${file.user_id}/${instanceId}`)}
-                                style={{ padding: 0, height: 'auto' }}
-                              >
-                                <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace' }}>
-                                  <span style={{ background: '#f5f5f5', padding: '2px 6px', borderRadius: 4 }}>
-                                    {instanceId}
-                                  </span>
-                                </span>
-                              </Button>
-                            </Tooltip>
-                            <Tooltip title="Copy Instance ID">
+
+
+                        <List.Item
+                          actions={[
+                            <Tooltip key="copy" title="Copy Instance ID">
                               <Button
                                 type="text"
-                                size="small"
                                 icon={<CopyOutlined />}
-                                onClick={() => { navigator.clipboard.writeText(instanceId); message.success('Instance ID copied'); }}
+                                onClick={() => {
+                                  navigator.clipboard.writeText(instanceId);
+                                  message.success('Instance ID copied');
+                                }}
+                              />
+                            </Tooltip>,
+                            <Tooltip key="view" title="View ECG waveform">
+                              <Button
+                                type="text"
+                                icon={<EyeOutlined />}
+                                onClick={() => navigate(`/ecg-view/${file.user_id}/${instanceId}`)}
+                              />
+                            </Tooltip>,
+                            <Tooltip key="xai" title="View XAI analysis">
+                              <Button
+                                type="text"
+                                icon={<ExperimentOutlined />}
+                                onClick={() => openXaiSelector(instanceId)}
                               />
                             </Tooltip>
-                          </div>
+                          ]}
+                        >
+                          <Tooltip title={instanceId}>
+                            <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace' }}>
+                              <span style={{ background: '#f5f5f5', padding: '2px 6px', borderRadius: 4 }}>
+                                {instanceId.length > 12 ? `${instanceId.slice(0, 6)}…${instanceId.slice(-6)}` : instanceId}
+                              </span>
+                            </span>
+                          </Tooltip>
                         </List.Item>
                       )}
                       style={{ maxHeight: '200px', overflow: 'auto' }}
@@ -729,7 +749,220 @@ const PatientDetail = () => {
         />
       </Card>
 
-      {/* AI Diagnosis Section removed per request */}
+
+      {/* AI Diagnosis Section removed */}
+      {false && (
+        <Card title="🤖 AI Diagnosis Results" style={{ marginTop: 24 }}>
+          <div style={{ marginBottom: 16 }}>
+            <Text strong>ECG Interpretation Summary</Text>
+            <div style={{ marginTop: 8 }}>
+              {Object.entries(diseaseConfig).map(([code, config]) => (
+                <Tag key={code} color={config.color} style={{ marginBottom: 4 }}>
+                  {config.icon} {code}
+                </Tag>
+              ))}
+            </div>
+          </div>
+
+          <List
+            dataSource={ecgFiles}
+            renderItem={(file) => {
+              const instanceId = file.instanceIDs?.[0];
+              const diagnosisData = mockAiDiagnosisData[instanceId];
+
+              return (
+                <List.Item>
+                  <Card
+                    size="small"
+                    title={`ECG Analysis: ${file.filename}`}
+                    style={{ width: '100%' }}
+                    extra={
+                      <Space>
+                        <Button
+                          type="primary"
+                          size="small"
+                          loading={diagnosisLoading[instanceId]}
+                          onClick={() => requestAiDiagnosis(instanceId)}
+                        >
+                          🔍 Analyze ECG
+                        </Button>
+                        <Button
+                          type="default"
+                          size="small"
+                          onClick={() => navigate(`/xai/${instanceId}`)}
+                        >
+                          🧠 View XAI
+                        </Button>
+                      </Space>
+                    }
+                  >
+                    {diagnosisData ? (
+                      <div>
+                        {/* Summary Section */}
+                        <Card size="small" title="Analysis Summary" style={{ marginBottom: 16 }}>
+                          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                            <div style={{ flex: 1, minWidth: 150 }}>
+                              <Text strong>Primary Diagnosis:</Text>
+                              <div style={{ marginTop: 4 }}>
+                                {diagnosisData.diagnoses.map((diagnosis, index) => {
+                                  const config = getDiseaseConfig(diagnosis.disease);
+                                  return (
+                                    <Tag
+                                      key={index}
+                                      color={config.color}
+                                      style={{ marginBottom: 4, fontSize: '12px' }}
+                                    >
+                                      {config.icon} {config.name}
+                                    </Tag>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                            <div style={{ flex: 1, minWidth: 150 }}>
+                              <Text strong>Overall Confidence:</Text>
+                              <div style={{ marginTop: 4 }}>
+                                <Progress
+                                  percent={diagnosisData.summary.overall_confidence}
+                                  size="small"
+                                  strokeColor={getRiskColor(diagnosisData.summary.risk_assessment)}
+                                  format={(percent) => `${percent}%`}
+                                />
+                              </div>
+                            </div>
+                            <div style={{ flex: 1, minWidth: 150 }}>
+                              <Text strong>Risk Assessment:</Text>
+                              <div style={{ marginTop: 4 }}>
+                                <Tag color={getRiskColor(diagnosisData.summary.risk_assessment)}>
+                                  {diagnosisData.summary.risk_assessment.toUpperCase()}
+                                </Tag>
+                              </div>
+                            </div>
+                          </div>
+                        </Card>
+
+                        {/* Detailed Diagnoses */}
+                        {diagnosisData.diagnoses.map((diagnosis, index) => {
+                          const config = getDiseaseConfig(diagnosis.disease);
+                          return (
+                            <Card
+                              key={index}
+                              size="small"
+                              title={
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  <span>{config.icon}</span>
+                                  <span>{diagnosis.title}</span>
+                                  <Tag color={config.color} style={{ marginLeft: 'auto' }}>
+                                    {config.name}
+                                  </Tag>
+                                </div>
+                              }
+                              style={{ marginBottom: 16 }}
+                            >
+                              <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                                {/* Clinical Report */}
+                                <Card size="small" title="Clinical Report" style={{ flex: 2, minWidth: 300 }}>
+                                  <div style={{ fontSize: '12px', lineHeight: '1.5' }}>
+                                    {diagnosis.report_text}
+                                  </div>
+                                  <div style={{ marginTop: 8 }}>
+                                    <Text type="secondary" style={{ fontSize: '11px' }}>
+                                      Lead: {diagnosis.lead_name} | Processing Time: {diagnosis.processing_time_seconds}s
+                                    </Text>
+                                  </div>
+                                </Card>
+
+                                {/* Metrics */}
+                                <Card size="small" title="Key Metrics" style={{ flex: 1, minWidth: 200 }}>
+                                  <Space direction="vertical" style={{ width: '100%' }}>
+                                    {Object.entries(diagnosis.metrics).map(([key, value]) => (
+                                      <div key={key} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                        <span style={{ fontSize: '11px' }}>
+                                          {key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}:
+                                        </span>
+                                        <span style={{ fontWeight: 'bold', color: '#1890ff', fontSize: '11px' }}>
+                                          {typeof value === 'number' ? value.toFixed(3) : value}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </Space>
+                                </Card>
+
+                                {/* Confidence */}
+                                <Card size="small" title="AI Confidence" style={{ flex: 1, minWidth: 150 }}>
+                                  <div style={{ textAlign: 'center' }}>
+                                    <div style={{ fontSize: '20px', fontWeight: 'bold', color: config.color }}>
+                                      {diagnosis.confidence}%
+                                    </div>
+                                    <div style={{ fontSize: '10px', color: '#666', marginBottom: 8 }}>
+                                      {diagnosis.confidence >= 90 ? 'Very High' :
+                                        diagnosis.confidence >= 80 ? 'High' :
+                                          diagnosis.confidence >= 70 ? 'Medium' : 'Low'} Confidence
+                                    </div>
+                                    <Progress
+                                      percent={diagnosis.confidence}
+                                      size="small"
+                                      strokeColor={config.color}
+                                      showInfo={false}
+                                    />
+                                  </div>
+                                </Card>
+                              </div>
+
+                              {/* Action Buttons */}
+                              <div style={{ marginTop: 16, textAlign: 'center' }}>
+                                <Space>
+                                  <Button
+                                    type="primary"
+                                    icon={<ExperimentOutlined />}
+                                    size="small"
+                                    onClick={() => requestXAIInterpretation(diagnosis.instance_id, [diagnosis.disease])}
+                                  >
+                                    View XAI Analysis
+                                  </Button>
+                                  <Button
+                                    type="default"
+                                    icon={<BarChartOutlined />}
+                                    size="small"
+                                    onClick={() => navigate(`/ecg-view/${file.user_id}/${diagnosis.instance_id}`)}
+                                  >
+                                    View Waveform
+                                  </Button>
+                                  <Button
+                                    type="default"
+                                    icon={<FileTextOutlined />}
+                                    size="small"
+                                  >
+                                    Download Report
+                                  </Button>
+                                </Space>
+                              </div>
+                            </Card>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+                        <div style={{ fontSize: '16px', color: '#666', marginBottom: 16 }}>
+                          No AI diagnosis available for this ECG file
+                        </div>
+                        <Button
+                          type="primary"
+                          icon={<ExperimentOutlined />}
+                          onClick={() => requestAiDiagnosis(instanceId)}
+                          loading={diagnosisLoading[instanceId]}
+                        >
+                          Generate AI Diagnosis
+                        </Button>
+                      </div>
+                    )}
+                  </Card>
+                </List.Item>
+              );
+            }}
+          />
+        </Card>
+      )}
+
 
       <Modal
         title="Edit Patient Information"
@@ -794,16 +1027,12 @@ const PatientDetail = () => {
             onChange={setSelectedDiseases}
             placeholder="Select diseases"
             style={{ width: '100%' }}
-            options={KNOWN_DISEASES.map(d => {
-              const cfg = getDiseaseConfig(d);
-              return { label: `${cfg.name} (${d})`, value: d };
-            })}
+
+            options={KNOWN_DISEASES.map(d => ({ label: d, value: d }))}
           />
-          {/* Separate-tab option removed: always open a single combined page */}
         </Space>
       </Modal>
 
-      {/* All-instances interpretation modal removed per request */}
 
       <Modal
         title="Edit ECG File"
