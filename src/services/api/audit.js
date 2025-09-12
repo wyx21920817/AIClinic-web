@@ -20,7 +20,11 @@ export const auditAPI = {
       if (params.resource_type) queryParams.append('resource_type', params.resource_type);
       if (params.search_text) queryParams.append('search_text', params.search_text);
 
+      console.log('Audit API - Query params:', queryParams.toString());
+      console.log('Audit API - Page size:', params.page_size);
+      
       const response = await request.get(`${API_ENDPOINTS.AUDIT}/logs?${queryParams.toString()}`);
+      console.log('Audit API - Response:', response);
       return response.data || response;
     } catch (error) {
       console.error('Error fetching audit logs:', error);

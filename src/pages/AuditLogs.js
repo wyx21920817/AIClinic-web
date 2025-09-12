@@ -58,12 +58,13 @@ const AuditLogs = () => {
   const [users, setUsers] = useState({});
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [selectedLog, setSelectedLog] = useState(null);
-  const [pagination, setPagination] = useState({ current: 1, pageSize: 25, total: 0 });
+  // Default page size is 20 as per API documentation
+  const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 });
   const [filters, setFilters] = useState({ action: undefined, resourceType: undefined, dateRange: [] });
   const [userModalVisible, setUserModalVisible] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [loadingUser, setLoadingUser] = useState(false);
-  const [hideVerify, setHideVerify] = useState(true);
+  const [hideVerify, setHideVerify] = useState(false); // Set to false to show all logs by default
 
   useEffect(() => {
     init();
@@ -72,7 +73,7 @@ const AuditLogs = () => {
   const init = async () => {
     try {
       await fetchUsers();
-      await fetchAuditLogs({ page: 1, pageSize: pagination.pageSize, append: false });
+      await fetchAuditLogs({ page: 1, pageSize: 20 });
     } catch (e) {
       setError(`Initialization failed: ${e.message}`);
     }
@@ -100,10 +101,11 @@ const AuditLogs = () => {
     }
   };
 
-  const fetchAuditLogs = async ({ page, pageSize, append = false }) => {
+  const fetchAuditLogs = async ({ page, pageSize }) => {
     setLoading(true);
     setError(null);
     try {
+      console.log('Fetching audit logs with page:', page, 'pageSize:', pageSize);
       const params = { page, page_size: pageSize };
       if (filters.action) params.action = filters.action;
       if (filters.resourceType) params.resource_type = filters.resourceType;
@@ -129,47 +131,43 @@ const AuditLogs = () => {
         };
       });
 
+      // Log the number of logs before filtering
+      console.log('Logs before filtering:', enhanced.length);
+      
       const filtered = hideVerify
         ? enhanced.filter((l) => !String(l.action || '').toLowerCase().includes('verify'))
         : enhanced;
+      
+      // Log the number of logs after filtering
+      console.log('Logs after filtering:', filtered.length, 'hideVerify:', hideVerify);
+      console.log('Sample actions:', enhanced.slice(0, 5).map(l => l.action));
 
-      setAuditLogs((prev) => {
-        const merged = append ? [...prev, ...filtered] : filtered;
-        const seen = new Set();
-        const signatureOf = (it) => {
-          const ts = it.timestamp ? String(it.timestamp) : '';
-          const uid = it.user_id ? String(it.user_id) : '';
-          const act = it.action ? String(it.action) : '';
-          const rtype = it.resource_type ? String(it.resource_type) : '';
-          const rid = it.resource_id ? String(it.resource_id) : '';
-          const det = it.details ? String(it.details).slice(0, 256) : '';
-          return `${ts}|${uid}|${act}|${rtype}|${rid}|${det}`;
-        };
-        return merged.filter((it) => {
-          const key = signatureOf(it);
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        });
-      });
+      setAuditLogs(filtered);
 
-      const total = response?.pagination?.total;
-      setPagination((prev) => ({ ...prev, current: page, pageSize, total: typeof total === 'number' ? total : (append ? auditLogs.length + filtered.length : filtered.length) }));
+      const total = response?.pagination?.total || response?.total;
+      setPagination((prev) => ({ ...prev, current: page, pageSize, total: typeof total === 'number' ? total : filtered.length }));
     } catch (e) {
       setError(`Failed to load audit logs: ${e.message}`);
-      if (!append) setAuditLogs([]);
+      setAuditLogs([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const loadMore = () => {
-    const total = pagination.total || 0;
-    if (pagination.current * pagination.pageSize < total) {
-      const next = pagination.current + 1;
-      setPagination((prev) => ({ ...prev, current: next }));
-      fetchAuditLogs({ page: next, pageSize: pagination.pageSize, append: true });
-    }
+  const handleTableChange = (newPagination, filters, sorter, extra) => {
+    console.log('Table change:', newPagination, extra);
+    // Update the local pagination state
+    setPagination(prev => ({
+      ...prev,
+      current: newPagination.current,
+      pageSize: newPagination.pageSize
+    }));
+    
+    // Fetch with the new pagination parameters
+    fetchAuditLogs({ 
+      page: newPagination.current, 
+      pageSize: newPagination.pageSize 
+    });
   };
 
   const handleExport = async () => {
@@ -516,14 +514,14 @@ const AuditLogs = () => {
         </div>
 
         <Space style={{ marginBottom: 16, flexWrap: 'wrap' }}>
-          <Button type="primary" icon={<ReloadOutlined />} onClick={() => fetchAuditLogs({ page: 1, pageSize: pagination.pageSize, append: false })} loading={loading}>
+          <Button type="primary" icon={<ReloadOutlined />} onClick={() => fetchAuditLogs({ page: 1, pageSize: pagination.pageSize })} loading={loading}>
             Refresh
           </Button>
           <Space>
             <Space>
-              <Button size="small" onClick={() => setFilters((prev) => { const end = dayjs().tz(PERTH_TZ).endOf('day').toDate(); const start = dayjs().tz(PERTH_TZ).endOf('day').subtract(6, 'day').startOf('day').toDate(); setPagination((p)=>({ ...p, current: 1 })); fetchAuditLogs({ page: 1, pageSize: pagination.pageSize, append: false }); return { ...prev, dateRange: [start, end] }; })}>Last 7 days</Button>
-              <Button size="small" onClick={() => setFilters((prev) => { const end = dayjs().tz(PERTH_TZ).endOf('day').toDate(); const start = dayjs().tz(PERTH_TZ).endOf('day').subtract(29, 'day').startOf('day').toDate(); setPagination((p)=>({ ...p, current: 1 })); fetchAuditLogs({ page: 1, pageSize: pagination.pageSize, append: false }); return { ...prev, dateRange: [start, end] }; })}>Last 30 days</Button>
-              <Button size="small" onClick={() => { setFilters((prev) => ({ ...prev, dateRange: [] })); setPagination((p)=>({ ...p, current: 1 })); fetchAuditLogs({ page: 1, pageSize: pagination.pageSize, append: false }); }}>All time</Button>
+              <Button size="small" onClick={() => setFilters((prev) => { const end = dayjs().tz(PERTH_TZ).endOf('day').toDate(); const start = dayjs().tz(PERTH_TZ).endOf('day').subtract(6, 'day').startOf('day').toDate(); setPagination((p)=>({ ...p, current: 1 })); fetchAuditLogs({ page: 1, pageSize: pagination.pageSize }); return { ...prev, dateRange: [start, end] }; })}>Last 7 days</Button>
+              <Button size="small" onClick={() => setFilters((prev) => { const end = dayjs().tz(PERTH_TZ).endOf('day').toDate(); const start = dayjs().tz(PERTH_TZ).endOf('day').subtract(29, 'day').startOf('day').toDate(); setPagination((p)=>({ ...p, current: 1 })); fetchAuditLogs({ page: 1, pageSize: pagination.pageSize }); return { ...prev, dateRange: [start, end] }; })}>Last 30 days</Button>
+              <Button size="small" onClick={() => { setFilters((prev) => ({ ...prev, dateRange: [] })); setPagination((p)=>({ ...p, current: 1 })); fetchAuditLogs({ page: 1, pageSize: pagination.pageSize }); }}>All time</Button>
             </Space>
             <Select
               allowClear
@@ -592,13 +590,13 @@ const AuditLogs = () => {
                 setHideVerify(v);
                 setPagination((prev) => ({ ...prev, current: 1 }));
                 setAuditLogs([]);
-                fetchAuditLogs({ page: 1, pageSize: pagination.pageSize, append: false });
+                fetchAuditLogs({ page: 1, pageSize: pagination.pageSize });
               }}
               checkedChildren="Hide verify"
               unCheckedChildren="Show verify"
             />
-            <Button icon={<FilterOutlined />} onClick={() => fetchAuditLogs({ page: 1, pageSize: pagination.pageSize, append: false })}>Apply</Button>
-            <Button onClick={() => { setFilters({ action: undefined, resourceType: undefined, dateRange: [] }); setPagination((prev) => ({ ...prev, current: 1 })); setAuditLogs([]); fetchAuditLogs({ page: 1, pageSize: pagination.pageSize, append: false }); }}>Reset</Button>
+            <Button icon={<FilterOutlined />} onClick={() => fetchAuditLogs({ page: 1, pageSize: pagination.pageSize })}>Apply</Button>
+            <Button onClick={() => { setFilters({ action: undefined, resourceType: undefined, dateRange: [] }); setPagination((prev) => ({ ...prev, current: 1 })); setAuditLogs([]); fetchAuditLogs({ page: 1, pageSize: pagination.pageSize }); }}>Reset</Button>
             <Button icon={<DownloadOutlined />} onClick={handleExport}>Export CSV</Button>
           </Space>
         </Space>
@@ -607,23 +605,31 @@ const AuditLogs = () => {
           <Alert message="Error" description={error} type="error" showIcon style={{ marginBottom: 16 }} />
         )}
 
-        {loading ? (
+        {loading && auditLogs.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 50 }}>
             <Spin size="large" />
             <p>Loading...</p>
           </div>
         ) : (
-          <Table columns={columns} dataSource={auditLogs} rowKey="id" pagination={false} scroll={{ x: 900 }} />
+          <Table 
+            columns={columns} 
+            dataSource={auditLogs} 
+            rowKey="id" 
+            pagination={{
+              current: pagination.current,
+              pageSize: pagination.pageSize,
+              total: pagination.total,
+              showSizeChanger: true,
+              showQuickJumper: true,
+              showTotal: (total) => `Total ${total} items`,
+              pageSizeOptions: ['10', '20', '50', '100'],
+              position: ['bottomCenter']
+            }}
+            loading={loading}
+            onChange={handleTableChange}
+            scroll={{ x: 900 }} 
+          />
         )}
-
-        <div style={{ textAlign: 'center', marginTop: 12 }}>
-          <div style={{ marginBottom: 8 }}>
-            <Text type="secondary">Showing {auditLogs.length} of {pagination.total || auditLogs.length}</Text>
-          </div>
-          {pagination.current * pagination.pageSize < (pagination.total || 0) && (
-            <Button onClick={loadMore} loading={loading}>See more</Button>
-          )}
-        </div>
       </Card>
 
       <Modal title="Audit Log Details" open={detailModalVisible} onCancel={() => setDetailModalVisible(false)} footer={[<Button key="close" onClick={() => setDetailModalVisible(false)}>Close</Button>]} width={720}>

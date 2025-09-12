@@ -331,6 +331,43 @@ export const aiDiagnosisAPI = {
       console.error('Error fetching highlighted leads:', error);
       throw error;
     }
+  },
+
+  // Get interpretation PDF
+  getInterpretationPDF: async (instanceId, diseases = []) => {
+    try {
+      console.log('Requesting interpretation PDF for instance:', instanceId, 'diseases:', diseases);
+      
+      const formData = new FormData();
+      diseases.forEach(disease => {
+        formData.append('disease', disease);
+      });
+      
+      // Connect to AIClinic engine server for PDF generation
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication required. Please log in.');
+      }
+      
+      const response = await fetch(`${API_BASE_URL}/api/ecg/interpretation-pdf/${instanceId}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('Interpretation PDF response:', data);
+      return data;
+    } catch (error) {
+      console.error('Error fetching interpretation PDF:', error);
+      throw error;
+    }
   }
 };
 

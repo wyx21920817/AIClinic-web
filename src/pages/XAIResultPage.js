@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Card, Typography, Button, Spin, Alert, Row, Col, Divider, Tag, Space, Progress, Tabs, Image, Form, Input, Checkbox, message } from 'antd';
-import { ArrowLeftOutlined, SaveOutlined, EditOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, SaveOutlined, EditOutlined, DownloadOutlined } from '@ant-design/icons';
 import { aiDiagnosisAPI, ecgAPI } from '../services/api/ecg';
+import { API_BASE_URL } from '../services/api/config';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -30,6 +31,7 @@ const XAIResultPage = () => {
   const [activeTab, setActiveTab] = useState('0');
   const [updateLoading, setUpdateLoading] = useState(false);
   const [approveLoading, setApproveLoading] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
   const [form] = Form.useForm();
   const [userId, setUserId] = useState(null); // We'll need the user ID for the API call
   const [ecgInfo, setEcgInfo] = useState({
@@ -171,6 +173,49 @@ const XAIResultPage = () => {
       message.error(err.message || 'Failed to approve ECG file');
     } finally {
       setApproveLoading(false);
+    }
+  };
+  
+  // Handle downloading the interpretation PDF
+  const handleDownloadPDF = async () => {
+    if (!instanceId) {
+      message.error('Missing instance ID');
+      return;
+    }
+    
+    try {
+      setPdfLoading(true);
+      
+      // Call API to get the PDF URL
+      const result = await aiDiagnosisAPI.getInterpretationPDF(instanceId, selectedDiseases);
+      
+      if (result && result.pdf_url) {
+        // Create a download link element
+        const downloadLink = document.createElement('a');
+        downloadLink.href = result.pdf_url;
+        
+        // Set the download attribute to force download instead of navigation
+        // Use the instance ID as the filename with .pdf extension
+        downloadLink.download = `ECG_Interpretation_${instanceId}.pdf`;
+        
+        // Append to the document
+        document.body.appendChild(downloadLink);
+        
+        // Trigger the download
+        downloadLink.click();
+        
+        // Clean up
+        document.body.removeChild(downloadLink);
+        
+        message.success('PDF report download started');
+      } else {
+        message.error('Failed to generate PDF report');
+      }
+    } catch (err) {
+      console.error('Error generating PDF report:', err);
+      message.error(err.message || 'Failed to generate PDF report');
+    } finally {
+      setPdfLoading(false);
     }
   };
 
@@ -401,6 +446,14 @@ const XAIResultPage = () => {
                       Approve ECG
                     </Button>
                   )}
+                  <Button
+                    type="primary"
+                    icon={<DownloadOutlined />}
+                    onClick={handleDownloadPDF}
+                    loading={pdfLoading}
+                  >
+                    Download PDF Report
+                  </Button>
                 </Space>
               </Form.Item>
             </Form>
