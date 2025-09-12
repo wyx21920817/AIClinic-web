@@ -41,18 +41,8 @@ const Sidebar = () => {
         },
       ]
       : []),
-    {
-      key: '/test-deliverables',
-      icon: <FileTextOutlined />,
-      label: 'Test Deliverables',
-      onClick: () => navigate('/test-deliverables'),
-    },
-    {
-      key: '/xai-demo',
-      icon: <ExperimentOutlined />,
-      label: 'XAI Demo',
-      onClick: () => navigate('/xai-demo'),
-    },
+    // Test Deliverables menu removed
+    // XAI Demo menu removed
     // ECG AI Results Demo menu removed
     {
       key: '/role-test',

@@ -6,7 +6,7 @@ import {
 } from 'ecg-dicom-web-viewer';
 import dicomParser from 'dicom-parser';
 import ReadECG from '../utils/ReadECG';
-import { Card, Space, Typography, Upload, Progress, Row, Col, Button, message } from 'antd';
+import { Card, Space, Typography, Upload, Progress, Row, Col, Button, message, Modal, Descriptions, Tag, Alert, Select } from 'antd';
 import { InboxOutlined, FileImageOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import request from '../services/api/request';
 import { API_ENDPOINTS, API_BASE_URL } from '../services/api/config';
@@ -89,9 +89,173 @@ const ECGViewer = () => {
   const [convertedDicomUrl, setConvertedDicomUrl] = React.useState(null);
   const [dicomTags, setDicomTags] = React.useState(null);
   const [isDiagnosing, setIsDiagnosing] = React.useState(false);
+  const [isXaiLoading, setIsXaiLoading] = React.useState(false);
+  const [xaiSelectOpen, setXaiSelectOpen] = React.useState(false);
+  const [selectedDiseases, setSelectedDiseases] = React.useState([]);
+  // Selections per section (mutually exclusive)
+  const [selectedDiseases1D, setSelectedDiseases1D] = React.useState([]);
+  const [selectedDiseasesResNet, setSelectedDiseasesResNet] = React.useState([]);
+  const [activePicker, setActivePicker] = React.useState(null); // '1d' | 'resnet' | null
+  const [xaiResult, setXaiResult] = React.useState(null);
+  const [diagnosisResult, setDiagnosisResult] = React.useState(null);
   const statusCheckIntervalRef = React.useRef(null);
   const viewerRef = React.useRef(null);
   const containerId = 'ecg-container';
+  const downloadFile = (blob, filename) => {
+    try {
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {}
+  };
+  const KNOWN_DISEASES = [
+    'NORM', '1dAVB', '2dAVB', '3dAVB', 'AFIB', 'AFLT', 'LBBB', 'RBBB', 'STACH', 'PAC', 'PVC', 'ST'
+  ];
+
+  // Display names for diseases (match XAI page)
+  const DISPLAY_NAME = {
+    AF: 'Atrial Fibrillation',
+    AFIB: 'Atrial Fibrillation',
+    ST: 'Sinus Tachycardia',
+    STACH: 'Sinus Tachycardia',
+    SB: 'Sinus Bradycardia',
+    SBRAD: 'Sinus Bradycardia',
+    NORM: 'Normal ECG',
+    '1dAVB': 'First-degree AV Block',
+    '2dAVB': 'Second-degree AV Block',
+    '3dAVB': 'Third-degree AV Block',
+    LBBB: 'Left Bundle Branch Block',
+    RBBB: 'Right Bundle Branch Block',
+    AFLT: 'Atrial Flutter',
+    PAC: 'Premature Atrial Complex',
+    PVC: 'Premature Ventricular Complex'
+  };
+  const toDisplay = (code) => DISPLAY_NAME[code] || code;
+
+  // Map UI labels to API-supported disease codes
+  const DISEASE_CODE_MAP = {
+    // Canonical names
+    AFIB: 'AFIB',
+    STACH: 'STACH',
+    LBBB: 'LBBB',
+    RBBB: 'RBBB',
+    '1dAVB': '1dAVB',
+    '2dAVB': '2dAVB',
+    SBRAD: 'SBRAD',
+    AFLT: 'AFLT',
+    NORM: 'NORM',
+    '3dAVB': '3dAVB',
+    PAC: 'PAC',
+    PVC: 'PVC',
+    // Synonyms in DICOM or engine
+    AF: 'AFIB',
+    ST: 'STACH',
+    SB: 'SBRAD',
+    NR: 'NORM',
+    NSR: 'NORM',
+    AFL: 'AFLT',
+    '1AVB': '1dAVB',
+    '2AVB': '2dAVB',
+    '3AVB': '3dAVB'
+  };
+  const ALLOWED_DISEASES = new Set(['1dAVB', '2dAVB', '3dAVB', 'RBBB', 'LBBB', 'SBRAD', 'AFIB', 'STACH', 'AFLT', 'NORM', 'PAC', 'PVC']);
+
+  const normalizeDiseases = (arr) => {
+    const input = Array.isArray(arr) ? arr : [];
+    const mapped = input.map(d => DISEASE_CODE_MAP[d] || d);
+    const filtered = mapped.filter(d => ALLOWED_DISEASES.has(d));
+    return Array.from(new Set(filtered));
+  };
+
+  const extractDiseasesFromDicom = React.useCallback(() => {
+    try {
+      // Prefer diagnosisResult keys if available
+      if (diagnosisResult && (diagnosisResult.original_dnn_model || diagnosisResult.resnet_fine_tuned_model)) {
+        const fromOneD = diagnosisResult.original_dnn_model ? Object.keys(diagnosisResult.original_dnn_model) : [];
+        const fromRes = diagnosisResult.resnet_fine_tuned_model ? Object.keys(diagnosisResult.resnet_fine_tuned_model) : [];
+        const merged = Array.from(new Set([...(fromOneD || []), ...(fromRes || [])]));
+        const normalized = normalizeDiseases(merged);
+        return normalized.slice(0, 3);
+      }
+      const raw = dicomTags?.['x00104000'];
+      if (!raw || typeof raw !== 'string') return [];
+      const parts = raw.split(' | ');
+      const candidates = [];
+      parts.forEach(p => {
+        const items = p.replace('ResNet Top5: ', '').split('; ');
+        items.forEach(it => {
+          const [type] = it.split(':');
+          if (type) {
+            const t = type.trim();
+            if (KNOWN_DISEASES.includes(t)) candidates.push(t);
+          }
+        });
+      });
+      // Normalize to API-supported set
+      const normalized = normalizeDiseases(candidates);
+      return normalized.slice(0, 3);
+    } catch {
+      return [];
+    }
+  }, [dicomTags, diagnosisResult]);
+
+  const handleViewXAI = async () => {
+    setIsXaiLoading(true);
+    try {
+      const defaults = extractDiseasesFromDicom();
+      if (defaults.length > 0) {
+        const params = new URLSearchParams();
+        defaults.forEach(d => params.append('d', d));
+        navigate(`/xai/${instanceId}?${params.toString()}`);
+      } else {
+        setSelectedDiseases([]);
+        setXaiSelectOpen(true);
+      }
+    } finally {
+      setIsXaiLoading(false);
+    }
+  };
+
+  const handleConfirmXAI = () => {
+    const diseases = normalizeDiseases(selectedDiseases && selectedDiseases.length > 0 ? selectedDiseases : []);
+    if (diseases.length === 0) {
+      message.error('Please select at least one abnormality');
+      return;
+    }
+    const params = new URLSearchParams();
+    diseases.forEach(d => params.append('d', d));
+    setXaiSelectOpen(false);
+    navigate(`/xai/${instanceId}?${params.toString()}`);
+  };
+
+  const interpretDiseases = (diseases) => {
+    const ds = normalizeDiseases(Array.isArray(diseases) ? diseases.filter(Boolean) : []);
+    if (ds.length === 0) {
+      message.error('Please select at least one abnormality');
+      return;
+    }
+    const params = new URLSearchParams();
+    ds.forEach(d => params.append('d', d));
+    navigate(`/xai/${instanceId}?${params.toString()}`);
+  };
+
+  const runXAIFor = (disease, label) => {
+    const d = String(disease || '').trim();
+    const mapped = DISEASE_CODE_MAP[d] || d;
+    if (!mapped || !ALLOWED_DISEASES.has(mapped)) {
+      message.error('Invalid abnormality');
+      return;
+    }
+    const params = new URLSearchParams();
+    params.append('d', mapped);
+    // Do not append display labels to query
+    navigate(`/xai/${instanceId}?${params.toString()}`);
+  };
 
   React.useEffect(() => {
     const loadInstanceFromOrthanc = async () => {
@@ -160,6 +324,71 @@ const ECGViewer = () => {
       }
     };
   }, [instanceId]);
+
+  // Fetch JSON diagnosis as fallback/source of truth
+  React.useEffect(() => {
+    const fetchDiagnosis = async () => {
+      if (!userId || !instanceId) return;
+      try {
+        const list = await request.get(`${API_ENDPOINTS.ECG}/${userId}/diagnosis`);
+        const match = Array.isArray(list)
+          ? list.find((it) => String(it.instance_id) === String(instanceId))
+          : null;
+        setDiagnosisResult(match?.diagnosis_result || null);
+      } catch (e) {
+        // silent fallback
+      }
+    };
+    fetchDiagnosis();
+  }, [userId, instanceId]);
+
+  const parsePercent = (v) => {
+    const num = Number(v);
+    if (Number.isNaN(num)) return '0.0%';
+    const pct = num <= 1 ? num * 100 : num;
+    return pct.toFixed(1) + '%';
+  };
+
+  const oneDItems = React.useMemo(() => {
+    try {
+      if (diagnosisResult?.original_dnn_model && typeof diagnosisResult.original_dnn_model === 'object') {
+        return Object.entries(diagnosisResult.original_dnn_model)
+          .map(([type, prob]) => ({ type, prob: Number(prob) }))
+          .sort((a, b) => b.prob - a.prob);
+      }
+      const raw = dicomTags?.['x00104000'];
+      if (raw) {
+        return raw.split(' | ')[0].split('; ').map((item) => {
+          const [type, prob] = item.split(':');
+          return { type, prob: Number(prob) };
+        });
+      }
+    } catch {}
+    return [];
+  }, [diagnosisResult, dicomTags]);
+
+  const resnetItems = React.useMemo(() => {
+    try {
+      if (diagnosisResult?.resnet_fine_tuned_model && typeof diagnosisResult.resnet_fine_tuned_model === 'object') {
+        return Object.entries(diagnosisResult.resnet_fine_tuned_model)
+          .map(([type, prob]) => ({ type, prob: Number(prob) }))
+          .sort((a, b) => b.prob - a.prob)
+          .slice(0, 5);
+      }
+      const raw = dicomTags?.['x00104000'];
+      if (raw) {
+        return raw
+          .split(' | ')[1]
+          .replace('ResNet Top5: ', '')
+          .split('; ')
+          .map((item) => {
+            const [type, prob] = item.split(':');
+            return { type, prob: Number(prob) };
+          });
+      }
+    } catch {}
+    return [];
+  }, [diagnosisResult, dicomTags]);
 
   const loadDicomFile = async (arrayBuffer, event) => {
     try {
@@ -531,43 +760,116 @@ const ECGViewer = () => {
 
         {dicomTags && (
           <Card
-            title={
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>AI Diagnosis Result</span>
-                {!dicomTags['x00104000'] && (
-                  <Button
-                    type="primary"
-                    size="middle"
-                    onClick={handleGetDiagnosis}
-                    loading={isDiagnosing}
-                    style={{ marginLeft: '12px' }}
-                  >
-                    Update Diagnose
-                  </Button>
-                )}
-              </div>
-            }
+            title={<span>AI Diagnosis Result</span>}
             style={{ marginTop: '20px' }}
           >
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+              <Space>
+                <Button
+                  type="primary"
+                  onClick={() => {
+                    const raw = activePicker === '1d'
+                      ? selectedDiseases1D
+                      : activePicker === 'resnet'
+                        ? selectedDiseasesResNet
+                        : [];
+                    const ds = normalizeDiseases(Array.isArray(raw) ? raw : []);
+                    if (!ds.length) {
+                      message.error('Please select at least one abnormality');
+                      return;
+                    }
+                    const params = new URLSearchParams();
+                    ds.forEach(d => params.append('d', d));
+                    navigate(`/xai/${instanceId}?${params.toString()}`);
+                  }}
+                >
+                  Interpret
+                </Button>
+                <Button
+                  type="primary"
+                  onClick={handleGetDiagnosis}
+                  loading={isDiagnosing}
+                >
+                  Update Diagnose
+                </Button>
+              </Space>
+            </div>
+            {(() => {
+              const raw = Array.from(new Set([...(selectedDiseases1D || []), ...(selectedDiseasesResNet || [])]));
+              const ds = normalizeDiseases(raw);
+              return ds.length > 0 ? (
+              <div style={{ marginBottom: 8 }}>
+                <Space wrap>
+                  {ds.map(d => (
+                    <Tag key={d}>{d}</Tag>
+                  ))}
+                </Space>
+              </div>
+              ) : null;
+            })()}
             {dicomTags['x00104000'] ? (
               <Row gutter={16}>
                 <Col span={12}>
-                  <Card type="inner" title="1D Model Results">
+                  <Card
+                    type="inner"
+                    title="1D Model Results"
+                    extra={
+                      <Space size={8}>
+                        <Select
+                          mode="multiple"
+                          size="small"
+                          placeholder="Select diseases"
+                          value={selectedDiseases1D}
+                          onChange={(vals) => {
+                            const v = Array.isArray(vals) ? vals : [];
+                            if (v.length > 0) {
+                              setActivePicker('1d');
+                              setSelectedDiseasesResNet([]);
+                            } else if (activePicker === '1d') {
+                              setActivePicker(null);
+                            }
+                            setSelectedDiseases1D(v);
+                          }}
+                          disabled={activePicker === 'resnet'}
+                          style={{ minWidth: 160 }}
+                        >
+                          {(() => {
+                            const candidates = (oneDItems && oneDItems.length)
+                              ? oneDItems.map(it => it.type)
+                              : (dicomTags['x00104000']
+                                  .split(' | ')[0]
+                                  .split('; ')
+                                  .map(item => item.split(':')[0])
+                                );
+                            const options = normalizeDiseases(candidates);
+                            return options.map(code => (
+                              <Select.Option key={code} value={code}>{code}</Select.Option>
+                            ));
+                          })()}
+                        </Select>
+                      </Space>
+                    }
+                  >
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                       <thead>
                         <tr>
                           <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Type</th>
                           <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Probability</th>
+                          <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}></th>
                         </tr>
                       </thead>
                       <tbody>
                         {dicomTags['x00104000'].split(' | ')[0].split('; ').map(item => {
                           const [type, prob] = item.split(':');
+                          const label = toDisplay(DISEASE_CODE_MAP[type] || type);
                           return (
                             <tr key={type}>
                               <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>{type}</td>
                               <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
                                 {(parseFloat(prob) * 100).toFixed(1)}%
+                              </td>
+                              <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'right' }}>
+                                <Button size="small" type="primary" ghost style={{ padding: '0 6px', height: 22, lineHeight: '20px' }} onClick={() => runXAIFor(type, label)}>AI Interpretation</Button>
                               </td>
                             </tr>
                           );
@@ -577,22 +879,67 @@ const ECGViewer = () => {
                   </Card>
                 </Col>
                 <Col span={12}>
-                  <Card type="inner" title="ResNet Top5 Results">
+                  <Card
+                    type="inner"
+                    title="ResNet Top5 Results"
+                    extra={
+                      <Space size={8}>
+                        <Select
+                          mode="multiple"
+                          size="small"
+                          placeholder="Select diseases"
+                          value={selectedDiseasesResNet}
+                          onChange={(vals) => {
+                            const v = Array.isArray(vals) ? vals : [];
+                            if (v.length > 0) {
+                              setActivePicker('resnet');
+                              setSelectedDiseases1D([]);
+                            } else if (activePicker === 'resnet') {
+                              setActivePicker(null);
+                            }
+                            setSelectedDiseasesResNet(v);
+                          }}
+                          disabled={activePicker === '1d'}
+                          style={{ minWidth: 160 }}
+                        >
+                          {(() => {
+                            const candidates = (resnetItems && resnetItems.length)
+                              ? resnetItems.map(it => it.type)
+                              : (dicomTags['x00104000']
+                                  .split(' | ')[1]
+                                  .replace('ResNet Top5: ', '')
+                                  .split('; ')
+                                  .map(item => item.split(':')[0])
+                                );
+                            const options = normalizeDiseases(candidates);
+                            return options.map(code => (
+                              <Select.Option key={code} value={code}>{code}</Select.Option>
+                            ));
+                          })()}
+                        </Select>
+                      </Space>
+                    }
+                  >
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                       <thead>
                         <tr>
                           <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Type</th>
                           <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Probability</th>
+                          <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}></th>
                         </tr>
                       </thead>
                       <tbody>
                         {dicomTags['x00104000'].split(' | ')[1].replace('ResNet Top5: ', '').split('; ').map(item => {
                           const [type, prob] = item.split(':');
+                          const label = toDisplay(DISEASE_CODE_MAP[type] || type);
                           return (
                             <tr key={type}>
                               <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>{type}</td>
                               <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
                                 {(parseFloat(prob) * 100).toFixed(1)}%
+                              </td>
+                              <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'right' }}>
+                                <Button size="small" type="primary" ghost style={{ padding: '0 6px', height: 22, lineHeight: '20px' }} onClick={() => runXAIFor(type, label)}>AI Interpretation</Button>
                               </td>
                             </tr>
                           );
@@ -646,6 +993,26 @@ const ECGViewer = () => {
             </div>
           </Card>
         )}
+
+        <Modal
+          title="Select diseases for XAI"
+          open={xaiSelectOpen}
+          onCancel={() => setXaiSelectOpen(false)}
+          onOk={handleConfirmXAI}
+          okText="View XAI"
+        >
+          <Space direction="vertical" style={{ width: '100%' }}>
+            <div>Select one or more suspected abnormalities to generate XAI:</div>
+            <Select
+              mode="multiple"
+              value={selectedDiseases}
+              onChange={setSelectedDiseases}
+              placeholder="Select diseases"
+              style={{ width: '100%' }}
+              options={KNOWN_DISEASES.map(d => ({ label: d, value: d }))}
+            />
+          </Space>
+        </Modal>
       </Space>
     </Card>
   );

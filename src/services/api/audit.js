@@ -60,6 +60,8 @@ export const auditAPI = {
 
       const response = await request.get(`${API_ENDPOINTS.AUDIT}/export?${queryParams.toString()}`, {
         responseType: 'blob',
+        headers: { Accept: 'text/csv,application/octet-stream,*/*' },
+        timeout: 60000
       });
       return response.data || response;
     } catch (error) {

@@ -89,9 +89,9 @@ export const DASHBOARD_CONFIG = {
     ],
     quickActions: [
       { title: 'Review ECGs', description: 'Analyze new recordings', icon: 'HeartOutlined', color: '#1890ff', route: '/patients' },
-      { title: 'View Reports', description: 'Patient summaries', icon: 'BarChartOutlined', color: '#52c41a', route: '/test-deliverables' },
+      // Test Deliverables tile removed
       { title: 'Schedule', description: 'Patient appointments', icon: 'CalendarOutlined', color: '#faad14', route: '/patients' },
-      { title: 'AI Feedback', description: 'Improve accuracy', icon: 'CheckCircleOutlined', color: '#722ed1', route: '/xai-demo' }
+      // XAI Demo tile removed
     ]
   },
   [USER_ROLES.ADMIN]: {

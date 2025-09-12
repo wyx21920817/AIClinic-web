@@ -14,6 +14,17 @@ export const ecgAPI = {
     }
   },
 
+  // Send ECG instance for AI diagnosis via server
+  diagnoseInstance: async (userId, instanceId) => {
+    try {
+      const response = await request.post(`${API_ENDPOINTS.ECG}/${userId}/instances/${instanceId}/diagnose`);
+      return response.data;
+    } catch (error) {
+      console.error('Error sending ECG instance for diagnosis:', error);
+      throw error;
+    }
+  },
+
   // Upload ECG file
   uploadECGFile: async (userId, file, notes = '', tags = []) => {
     try {

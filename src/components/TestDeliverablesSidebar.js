@@ -347,7 +347,7 @@ const TestDeliverablesSidebar = () => {
             type="primary" 
             block 
             icon={<ExperimentOutlined />}
-            onClick={() => window.open('/test-deliverables', '_blank')}
+            // Test Deliverables link removed
           >
             View Full Demo
           </Button>

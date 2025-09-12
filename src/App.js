@@ -13,11 +13,10 @@ import AuthRoute from './components/AuthRoute';
 import ECGViewer from './components/ECGViewer';
 import Account from './pages/account/Account';
 import UserDetail from './pages/doctors/UserDetail';
-import TestDeliverables from './pages/TestDeliverables';
 import SimpleTest from './pages/SimpleTest';
 import AIEngineShowcase from './pages/AIEngineShowcase';
-import XAIDemo from './pages/XAIDemo';
-import AuditLogsEnhanced from './pages/AuditLogsEnhanced';
+import XAIResultPage from './pages/XAIResultPage';
+import AuditLogs from './pages/AuditLogs';
 // import AIECGResultsDemo from './pages/AIECGResultsDemo';
 import RoleTest from './pages/RoleTest';
 import APITest from './pages/APITest';
@@ -43,16 +42,16 @@ function App() {
             <Route path="doctors/edit/:id" element={<AddDoctor />} />
             <Route path="doctors/:userId" element={<UserDetail />} />
             <Route path="account" element={<Account />} />
-            <Route path="test-deliverables" element={<PrivateRoute allowedRoles={['doctor', 'admin']} />}>
-              <Route index element={<TestDeliverables />} />
-            </Route>
+            {/* Test Deliverables demo removed */}
             <Route path="audit-logs" element={<PrivateRoute allowedRoles={['admin']} />}>
-              <Route index element={<AuditLogsEnhanced />} />
+              <Route index element={<AuditLogs />} />
             </Route>
             {/* ECG AI Results Demo removed */}
             <Route path="simple-test" element={<SimpleTest />} />
             <Route path="ai-engine-showcase" element={<AIEngineShowcase />} />
-            <Route path="xai-demo" element={<XAIDemo />} />
+            {/* XAI demo route removed */}
+            <Route path="xai/:instanceId" element={<XAIResultPage />} />
+            <Route path="xai/patient/:patientId" element={<XAIResultPage />} />
             <Route path="role-test" element={<RoleTest />} />
             <Route path="api-test" element={<APITest />} />
             <Route path="doctor-home" element={<PrivateRoute allowedRoles={['doctor']} />}>

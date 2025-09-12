@@ -85,12 +85,19 @@ export const patientsApi = {
     request.delete(API_ENDPOINTS.PATIENT_DETAIL(id)),
 
   // Get patient's ECG files
-  getPatientEcgFiles: (userId) =>
-    request.get(API_ENDPOINTS.ECG_FILES(userId)),
+  getPatientEcgFiles: (patientId) =>
+    request.get(API_ENDPOINTS.ECG_PATIENT_FILES(patientId)),
 
   // Get patient's ECG file
   getPatientEcgFile: (userId, fileId, options = {}) =>
     request.get(API_ENDPOINTS.ECG_FILE_DETAIL(userId, fileId), { params: options }),
+
+  // Download patient's ECG file (DICOM)
+  downloadEcgFile: (userId, fileId) =>
+    request.get(
+      `${API_ENDPOINTS.ECG_FILE_DETAIL(userId, fileId)}?download=true`,
+      { responseType: 'blob' }
+    ),
 
   // Upload ECG file
   uploadEcgFile: (userId, file) => {
