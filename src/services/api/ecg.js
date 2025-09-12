@@ -1,5 +1,5 @@
 import request from './request';
-import { API_ENDPOINTS } from './config';
+import { API_ENDPOINTS, API_BASE_URL } from './config';
 
 // ECG API Service
 export const ecgAPI = {
@@ -63,11 +63,12 @@ export const ecgAPI = {
   },
 
   // Update ECG file metadata
-  updateECGFile: async (userId, instanceId, notes, tags) => {
+  updateECGFile: async (userId, instanceId, notes, tags, approvedStatus = false) => {
     try {
       const formData = new URLSearchParams();
       formData.append('notes', notes);
       formData.append('tags', tags);
+      formData.append('approved_status', approvedStatus);
 
       const response = await request.put(
         `${API_ENDPOINTS.ECG}/${userId}/files/${instanceId}`,
@@ -215,10 +216,16 @@ export const aiDiagnosisAPI = {
   getDiagnosis: async (instanceId) => {
     try {
       // Connect to AIClinic engine server
-      const response = await fetch(`http://localhost:8000/diagnose/${instanceId}`, {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication required. Please log in.');
+      }
+      
+      const response = await fetch(`${API_BASE_URL}/api/ecg/diagnose/${instanceId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         }
       });
       
@@ -241,10 +248,16 @@ export const aiDiagnosisAPI = {
       console.log('Requesting AI diagnosis for instance:', instanceId);
       
       // Connect to AIClinic engine server
-      const response = await fetch(`http://localhost:8000/diagnose/${instanceId}`, {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication required. Please log in.');
+      }
+      
+      const response = await fetch(`${API_BASE_URL}/api/ecg/diagnose/${instanceId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         }
       });
       
@@ -272,8 +285,16 @@ export const aiDiagnosisAPI = {
       });
       
       // Connect to AIClinic engine server for XAI
-      const response = await fetch(`http://localhost:8000/interprete/${instanceId}`, {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication required. Please log in.');
+      }
+      
+      const response = await fetch(`${API_BASE_URL}/api/ecg/interpretation/${instanceId}`, {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
         body: formData
       });
       
@@ -369,4 +390,4 @@ export default {
   handleAPIError,
   handleCORSError,
   handleAuthError
-}; 
+};

@@ -6,7 +6,7 @@ import {
 } from 'ecg-dicom-web-viewer';
 import dicomParser from 'dicom-parser';
 import ReadECG from '../utils/ReadECG';
-import { Card, Space, Typography, Upload, Progress, Row, Col, Button, message, Switch, Tooltip, Select, Modal, Tag, Slider } from 'antd';
+import { Card, Space, Typography, Upload, Progress, Row, Col, Button, message, Switch, Tooltip, Select, Modal, Tag, Slider, Dropdown, Menu } from 'antd';
 import { ArrowLeftOutlined, EyeOutlined, HeatMapOutlined, InfoCircleOutlined, PlayCircleOutlined, PauseCircleOutlined, ExpandOutlined, CompressOutlined, SettingOutlined } from '@ant-design/icons';
 import request from '../services/api/request';
 import { API_ENDPOINTS, API_BASE_URL } from '../services/api/config';
@@ -147,8 +147,6 @@ const SOP_CLASS_DESCRIPTIONS = {
 
 const ECGViewer = () => {
   const { userId, instanceId } = useParams();
-  console.log('ECGViewer mounted');
-  console.log('URL params:', { userId, instanceId });
   const navigate = useNavigate();
   const [error, setError] = React.useState(null);
   const [isConverting, setIsConverting] = React.useState(false);
@@ -218,6 +216,10 @@ const ECGViewer = () => {
   const [samplingRate, setSamplingRate] = React.useState(500); // Default 500 Hz
   const [numLeads, setNumLeads] = React.useState(12);
   const [availableLeads, setAvailableLeads] = React.useState(['I', 'II', 'III', 'aVR', 'aVL', 'aVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']);
+  
+  // AI interpretation state
+  const [selectedDiseases, setSelectedDiseases] = React.useState([]);
+  const [interpretationLoading, setInterpretationLoading] = React.useState(false);
 
   React.useEffect(() => {
     const loadInstanceFromOrthanc = async () => {
@@ -3036,6 +3038,22 @@ const ECGViewer = () => {
     setPlaybackInterval(interval);
   };
 
+  const handleBack = () => {
+    navigate(-1);
+  };
+
+  const handleInterpretationRequest = () => {
+    if (!selectedDiseases || selectedDiseases.length === 0) {
+      message.error('Please select at least one disease for interpretation');
+      return;
+    }
+
+    setInterpretationLoading(true);
+    
+    // Navigate to the XAI result page with the selected diseases
+    navigate(`/xai/${instanceId}`, { state: { selectedDiseases } });
+  };
+
   const handleReset = () => {
     setCurrentTime(0);
     setWaveformOffset(0);
@@ -3734,10 +3752,46 @@ const ECGViewer = () => {
                 </Card>
               </Col>
             </Row>
+            
+            {/* Disease Selection Dropdown and Interpretation Button */}
+            <Row gutter={16} style={{ marginTop: '16px' }}>
+              <Col span={24}>
+                <Card type="inner" title="Get Disease Interpretations">
+                  <Row gutter={16} align="middle">
+                    <Col span={16}>
+                      <Select
+                        placeholder="Select diseases for interpretation"
+                        style={{ width: '100%' }}
+                        mode="multiple"
+                        value={selectedDiseases}
+                        onChange={(values) => setSelectedDiseases(values)}
+                      >
+                        {/* Combine both model results and filter out duplicates */}
+                        {Array.from(new Set(
+                          dicomTags['x00104000'].split(' | ')[0].split('; ')
+                            .concat(dicomTags['x00104000'].split(' | ')[1].replace('ResNet Top5: ', '').split('; '))
+                            .map(item => item.split(':')[0])
+                        )).map(type => (
+                          <Option key={type} value={type}>{type}</Option>
+                        ))}
+                      </Select>
+                    </Col>
+                    <Col span={8}>
+                      <Button 
+                        type="primary" 
+                        onClick={handleInterpretationRequest}
+                        loading={interpretationLoading}
+                        block
+                      >
+                        Get Interpretations
+                      </Button>
+                    </Col>
+                  </Row>
+                </Card>
+              </Col>
+            </Row>
           </Card>
         )}
-
-
 
         {dicomTags && (
           <Card title="DICOM Tags" style={{ marginTop: '20px' }}>
