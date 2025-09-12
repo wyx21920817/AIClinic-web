@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 
-import { Card, Descriptions, Button, Space, Upload, List, Tag, message, Modal, Form, Input, Select, DatePicker, Tooltip } from 'antd';
+import { Card, Descriptions, Button, Space, Upload, List, Tag, message, Modal, Form, Input, Select, DatePicker, Tooltip, Typography, Progress } from 'antd';
 import { useParams, useNavigate } from 'react-router-dom';
-import { UploadOutlined, EditOutlined, DeleteOutlined, CopyOutlined, UserOutlined, MailOutlined, IdcardOutlined, DatabaseOutlined, ClockCircleOutlined, NumberOutlined } from '@ant-design/icons';
+import { UploadOutlined, EditOutlined, DeleteOutlined, CopyOutlined, UserOutlined, MailOutlined, IdcardOutlined, DatabaseOutlined, ClockCircleOutlined, NumberOutlined, EyeOutlined, ExperimentOutlined, BarChartOutlined, FileTextOutlined } from '@ant-design/icons';
 
 import styled from '@emotion/styled';
 import { patientsApi } from '../../services/api/patients';
@@ -754,7 +754,7 @@ const PatientDetail = () => {
       {false && (
         <Card title="🤖 AI Diagnosis Results" style={{ marginTop: 24 }}>
           <div style={{ marginBottom: 16 }}>
-            <Text strong>ECG Interpretation Summary</Text>
+            <Typography.Text strong>ECG Interpretation Summary</Typography.Text>
             <div style={{ marginTop: 8 }}>
               {Object.entries(diseaseConfig).map(([code, config]) => (
                 <Tag key={code} color={config.color} style={{ marginBottom: 4 }}>
@@ -802,7 +802,7 @@ const PatientDetail = () => {
                         <Card size="small" title="Analysis Summary" style={{ marginBottom: 16 }}>
                           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                             <div style={{ flex: 1, minWidth: 150 }}>
-                              <Text strong>Primary Diagnosis:</Text>
+                              <Typography.Text strong>Primary Diagnosis:</Typography.Text>
                               <div style={{ marginTop: 4 }}>
                                 {diagnosisData.diagnoses.map((diagnosis, index) => {
                                   const config = getDiseaseConfig(diagnosis.disease);
@@ -819,7 +819,7 @@ const PatientDetail = () => {
                               </div>
                             </div>
                             <div style={{ flex: 1, minWidth: 150 }}>
-                              <Text strong>Overall Confidence:</Text>
+                              <Typography.Text strong>Overall Confidence:</Typography.Text>
                               <div style={{ marginTop: 4 }}>
                                 <Progress
                                   percent={diagnosisData.summary.overall_confidence}
@@ -830,7 +830,7 @@ const PatientDetail = () => {
                               </div>
                             </div>
                             <div style={{ flex: 1, minWidth: 150 }}>
-                              <Text strong>Risk Assessment:</Text>
+                              <Typography.Text strong>Risk Assessment:</Typography.Text>
                               <div style={{ marginTop: 4 }}>
                                 <Tag color={getRiskColor(diagnosisData.summary.risk_assessment)}>
                                   {diagnosisData.summary.risk_assessment.toUpperCase()}
@@ -865,9 +865,9 @@ const PatientDetail = () => {
                                     {diagnosis.report_text}
                                   </div>
                                   <div style={{ marginTop: 8 }}>
-                                    <Text type="secondary" style={{ fontSize: '11px' }}>
+                                    <Typography.Text type="secondary" style={{ fontSize: '11px' }}>
                                       Lead: {diagnosis.lead_name} | Processing Time: {diagnosis.processing_time_seconds}s
-                                    </Text>
+                                    </Typography.Text>
                                   </div>
                                 </Card>
 

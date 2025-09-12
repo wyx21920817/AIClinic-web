@@ -461,6 +461,29 @@ const AuditLogs = () => {
     }
   ];
 
+  const getActionIcon = (action) => {
+    switch (action) {
+      case 'login':
+        return <LockOutlined />;
+      case 'logout':
+        return <LockOutlined />;
+      case 'user_created':
+        return <UserOutlined />;
+      case 'user_deactivated':
+        return <UserOutlined />;
+      case 'upload_success':
+        return <UploadOutlined />;
+      case 'upload_failed':
+        return <UploadOutlined />;
+      case 'get_diagnosis':
+        return <ApiOutlined />;
+      case 'submit_feedback':
+        return <ApiOutlined />;
+      default:
+        return <SecurityScanOutlined />;
+    }
+  };
+
   const getResourceIcon = (resource) => {
     switch (resource) {
       case 'user':
