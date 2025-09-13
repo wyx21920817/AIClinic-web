@@ -279,10 +279,8 @@ export const aiDiagnosisAPI = {
     try {
       console.log('Requesting XAI interpretation for instance:', instanceId, 'diseases:', diseases);
       
-      const formData = new FormData();
-      diseases.forEach(disease => {
-        formData.append('disease', disease);
-      });
+      const form = new URLSearchParams();
+      diseases.forEach(disease => form.append('disease', disease));
       
       // Connect to AIClinic engine server for XAI
       const token = localStorage.getItem('token');
@@ -293,9 +291,10 @@ export const aiDiagnosisAPI = {
       const response = await fetch(`${API_BASE_URL}/api/ecg/interpretation/${instanceId}`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/x-www-form-urlencoded'
         },
-        body: formData
+        body: form
       });
       
       if (!response.ok) {
@@ -338,10 +337,8 @@ export const aiDiagnosisAPI = {
     try {
       console.log('Requesting interpretation PDF for instance:', instanceId, 'diseases:', diseases);
       
-      const formData = new FormData();
-      diseases.forEach(disease => {
-        formData.append('disease', disease);
-      });
+      const form = new URLSearchParams();
+      diseases.forEach(disease => form.append('disease', disease));
       
       // Connect to AIClinic engine server for PDF generation
       const token = localStorage.getItem('token');
@@ -352,9 +349,10 @@ export const aiDiagnosisAPI = {
       const response = await fetch(`${API_BASE_URL}/api/ecg/interpretation-pdf/${instanceId}`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/x-www-form-urlencoded'
         },
-        body: formData
+        body: form
       });
       
       if (!response.ok) {

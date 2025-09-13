@@ -100,6 +100,7 @@ const ECGViewer = () => {
   const [samplingRate, setSamplingRate] = React.useState(500);
   const [leadNames, setLeadNames] = React.useState([]);
   const [currentCanvasId, setCurrentCanvasId] = React.useState(null); // Store current canvas ID
+  const [selectedDiseasesXAI, setSelectedDiseasesXAI] = React.useState([]);
 
   // Adjustable display parameters (reference Weasis)
   const [mmPerSecond, setMmPerSecond] = React.useState(25); // Speed: 25/50 mm/s
@@ -931,6 +932,66 @@ const ECGViewer = () => {
     }
   };
 
+  // Navigate to XAI interpretation page for a given disease code
+  const handleInterpretation = (diseaseCodeRaw) => {
+    if (!instanceId) {
+      message.error('Missing instance ID');
+      return;
+    }
+
+    // Normalize common aliases to backend-supported codes
+    const DISEASE_CODE_MAP = {
+      AF: 'AFIB',
+      NR: 'NORM',
+      NSR: 'NORM',
+      ST: 'STACH',
+      '1AVB': '1dAVB',
+      '2AVB': '2dAVB',
+      '3AVB': '3dAVB'
+    };
+
+    const disease = (DISEASE_CODE_MAP[diseaseCodeRaw] || diseaseCodeRaw || '').trim();
+    if (!disease) {
+      message.error('Invalid disease type');
+      return;
+    }
+
+    navigate(`/xai/${instanceId}`, { state: { selectedDiseases: [disease] } });
+  };
+
+  // Build disease options from AI diagnosis tag (x00104000)
+  const getAvailableDiseases = React.useMemo(() => {
+    const set = new Set();
+    const raw = dicomTags?.['x00104000'];
+    if (!raw) return [];
+    const parts = String(raw).split(' | ');
+    const parseBlock = (text) => (text || '')
+      .replace('ResNet Top5: ', '')
+      .split('; ')
+      .map(s => s.split(':')[0])
+      .filter(Boolean);
+    if (parts[0]) parseBlock(parts[0]).forEach(t => set.add(t));
+    if (parts[1]) parseBlock(parts[1]).forEach(t => set.add(t));
+    return Array.from(set);
+  }, [dicomTags]);
+
+  // Interpret multiple selected diseases
+  const handleInterpretMultiple = () => {
+    if (!instanceId) {
+      message.error('Missing instance ID');
+      return;
+    }
+    if (!selectedDiseasesXAI || selectedDiseasesXAI.length === 0) {
+      message.error('Select at least one disease');
+      return;
+    }
+    const DISEASE_CODE_MAP = { AF: 'AFIB', NR: 'NORM', NSR: 'NORM', ST: 'STACH', '1AVB': '1dAVB', '2AVB': '2dAVB', '3AVB': '3dAVB' };
+    const normalized = Array.from(new Set(selectedDiseasesXAI.map(d => DISEASE_CODE_MAP[d] || d).filter(Boolean)));
+    const params = new URLSearchParams();
+    normalized.forEach(d => params.append('d', d));
+    navigate(`/xai/${instanceId}?${params.toString()}`);
+  };
+
   return (
     <Card
       title={
@@ -1098,6 +1159,21 @@ const ECGViewer = () => {
             }
             style={{ marginTop: '20px' }}
           >
+            {dicomTags['x00104000'] && (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+                <span style={{ color: '#666' }}>Select diseases:</span>
+                <Select
+                  mode="multiple"
+                  allowClear
+                  placeholder="Choose diseases"
+                  style={{ minWidth: 280 }}
+                  value={selectedDiseasesXAI}
+                  onChange={setSelectedDiseasesXAI}
+                  options={getAvailableDiseases.map(d => ({ label: d, value: d }))}
+                />
+                <Button type="primary" onClick={handleInterpretMultiple}>Interpret</Button>
+              </div>
+            )}
             {dicomTags['x00104000'] ? (
               <Row gutter={16}>
                 <Col span={12}>
@@ -1107,6 +1183,7 @@ const ECGViewer = () => {
                         <tr>
                           <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Type</th>
                           <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Probability</th>
+                          <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Action</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1120,6 +1197,11 @@ const ECGViewer = () => {
                                 <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>{type}</td>
                                 <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
                                   {prob ? `${(parseFloat(prob) * 100).toFixed(1)}%` : 'N/A'}
+                                </td>
+                                <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                                  <Button size="small" onClick={() => handleInterpretation(String(type))}>
+                                    AI Interpretation
+                                  </Button>
                                 </td>
                               </tr>
                             );
@@ -1135,6 +1217,7 @@ const ECGViewer = () => {
                         <tr>
                           <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Type</th>
                           <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Probability</th>
+                          <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Action</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1149,6 +1232,11 @@ const ECGViewer = () => {
                                 <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>{type}</td>
                                 <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
                                   {prob ? `${(parseFloat(prob) * 100).toFixed(1)}%` : 'N/A'}
+                                </td>
+                                <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                                  <Button size="small" onClick={() => handleInterpretation(String(type))}>
+                                    AI Interpretation
+                                  </Button>
                                 </td>
                               </tr>
                             );

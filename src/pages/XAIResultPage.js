@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { Card, Typography, Button, Spin, Alert, Row, Col, Divider, Tag, Space, Progress, Tabs, Image, Form, Input, Checkbox, message } from 'antd';
-import { ArrowLeftOutlined, SaveOutlined, EditOutlined, DownloadOutlined } from '@ant-design/icons';
-import { aiDiagnosisAPI, ecgAPI } from '../services/api/ecg';
+import { Card, Typography, Button, Spin, Alert, Row, Col, Divider, Tag, Space, Progress, Tabs, Image, Form, Input, Checkbox, Modal, message } from 'antd';
+import { ArrowLeftOutlined, EditOutlined, DownloadOutlined } from '@ant-design/icons';
+import { aiDiagnosisAPI, ecgAPI, feedbackAPI } from '../services/api/ecg';
 import { API_BASE_URL } from '../services/api/config';
 
 const { Title, Text, Paragraph } = Typography;
@@ -27,9 +27,10 @@ const XAIResultPage = () => {
   const location = useLocation();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [interpretationData, setInterpretationData] = useState(null);
-  const [activeTab, setActiveTab] = useState('0');
-  const [updateLoading, setUpdateLoading] = useState(false);
+  const [interpretationData, setInterpretationData] = useState(null); // used for single-instance view
+  const [activeTab, setActiveTab] = useState('0'); // disease tab key for single-instance view
+  const [interpretationsByInstance, setInterpretationsByInstance] = useState({}); // multi-instance results
+  const [activeInstanceKey, setActiveInstanceKey] = useState('');
   const [approveLoading, setApproveLoading] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [form] = Form.useForm();
@@ -39,12 +40,38 @@ const XAIResultPage = () => {
     tags: '',
     approved_status: false
   });
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   
-  // Get the selected diseases from location state
-  const selectedDiseases = location.state?.selectedDiseases || [];
+  // Get the selected diseases from navigation state or URL query (?d=AFIB&d=LBBB)
+  const queryDiseases = (() => {
+    try {
+      const search = new URLSearchParams(location.search || '');
+      return search.getAll('d');
+    } catch (_) {
+      return [];
+    }
+  })();
+  const selectedDiseases = (location.state?.selectedDiseases && location.state.selectedDiseases.length > 0)
+    ? location.state.selectedDiseases
+    : queryDiseases;
+
+  // Support multi-instance via query: ?i=ID1&i=ID2; fallback to URL param instanceId
+  const queryInstanceIds = (() => {
+    try {
+      const search = new URLSearchParams(location.search || '');
+      return search.getAll('i');
+    } catch (_) {
+      return [];
+    }
+  })();
+  const instanceIds = (queryInstanceIds && queryInstanceIds.length > 0)
+    ? queryInstanceIds
+    : (instanceId ? [instanceId] : []);
+  const isMultiInstance = instanceIds.length > 1;
+  const currentInstanceId = isMultiInstance ? activeInstanceKey || instanceIds[0] : instanceId;
 
   useEffect(() => {
-    const fetchInterpretation = async () => {
+    const fetchInterpretations = async () => {
       if (!selectedDiseases || selectedDiseases.length === 0) {
         setError('No diseases selected for interpretation');
         setLoading(false);
@@ -53,37 +80,31 @@ const XAIResultPage = () => {
 
       try {
         setLoading(true);
-        // Call the API to get interpretation for the selected diseases
-        const result = await aiDiagnosisAPI.getXAIInterpretation(instanceId, selectedDiseases);
-        setInterpretationData(result);
-        
-        // Set the active tab to the first result if available
-        if (result && result.results && result.results.length > 0) {
-          setActiveTab('0');
-        }
-        
-        // Extract user ID from the ecg_file data if available
-        if (result && result.ecg_file) {
-          setUserId(result.ecg_file.patient_id); // Using patient_id as user_id
-          
-          // Set initial form values and ecgInfo state
-          const notes = result.ecg_file.notes || '';
-          const tags = Array.isArray(result.ecg_file.tags) 
-            ? result.ecg_file.tags.join(', ') 
-            : '';
-          const approved = result.ecg_file.approved_status || false;
-          
-          setEcgInfo({
-            notes,
-            tags,
-            approved_status: approved
-          });
-          
-          form.setFieldsValue({
-            notes,
-            tags,
-            approved_status: approved
-          });
+        if (isMultiInstance) {
+          setActiveInstanceKey(instanceIds[0]);
+          const results = await Promise.all(
+            instanceIds.map(async (id) => {
+              const res = await aiDiagnosisAPI.getXAIInterpretation(id, selectedDiseases);
+              return [id, res];
+            })
+          );
+          const map = {};
+          results.forEach(([id, res]) => { map[id] = res; });
+          setInterpretationsByInstance(map);
+        } else if (instanceIds[0]) {
+          const result = await aiDiagnosisAPI.getXAIInterpretation(instanceIds[0], selectedDiseases);
+          setInterpretationData(result);
+          if (result && result.results && result.results.length > 0) {
+            setActiveTab('0');
+          }
+          if (result && result.ecg_file) {
+            setUserId(result.ecg_file.patient_id);
+            const notes = result.ecg_file.notes || '';
+            const tags = Array.isArray(result.ecg_file.tags) ? result.ecg_file.tags.join(', ') : '';
+            const approved = result.ecg_file.approved_status || false;
+            setEcgInfo({ notes, tags, approved_status: approved });
+            form.setFieldsValue({ notes, tags, approved_status: approved });
+          }
         }
       } catch (err) {
         console.error('Error fetching interpretation:', err);
@@ -93,49 +114,14 @@ const XAIResultPage = () => {
       }
     };
 
-    fetchInterpretation();
-  }, [instanceId, selectedDiseases, form]);
+    fetchInterpretations();
+  }, [JSON.stringify(instanceIds), JSON.stringify(selectedDiseases), form]);
 
   const handleBack = () => {
     navigate(-1); // Go back to previous page
   };
   
-  const handleUpdateECG = async (values) => {
-    if (!userId || !instanceId) {
-      message.error('Missing user ID or instance ID');
-      return;
-    }
-    
-    try {
-      setUpdateLoading(true);
-      
-      // Convert tags string to array if needed by the API
-      const tagsString = values.tags;
-      
-      // Call the API to update the ECG file
-      await ecgAPI.updateECGFile(
-        userId,
-        instanceId,
-        values.notes,
-        tagsString,
-        values.approved_status
-      );
-      
-      // Update local state
-      setEcgInfo({
-        notes: values.notes,
-        tags: values.tags,
-        approved_status: values.approved_status
-      });
-      
-      message.success('ECG file updated successfully');
-    } catch (err) {
-      console.error('Error updating ECG file:', err);
-      message.error(err.message || 'Failed to update ECG file');
-    } finally {
-      setUpdateLoading(false);
-    }
-  };
+  // Update ECG handler removed with inline notes section
   
   const handleApprove = async () => {
     if (!userId || !instanceId) {
@@ -216,6 +202,77 @@ const XAIResultPage = () => {
       message.error(err.message || 'Failed to generate PDF report');
     } finally {
       setPdfLoading(false);
+    }
+  };
+
+  // PDF for a specified instance (used in multi-instance view)
+  const handleDownloadPDFFor = async (id) => {
+    if (!id) return;
+    try {
+      setPdfLoading(true);
+      const result = await aiDiagnosisAPI.getInterpretationPDF(id, selectedDiseases);
+      if (result && result.pdf_url) {
+        const a = document.createElement('a');
+        a.href = result.pdf_url;
+        a.download = `ECG_Interpretation_${id}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        message.success('PDF report download started');
+      } else {
+        message.error('Failed to generate PDF report');
+      }
+    } catch (err) {
+      console.error('Error generating PDF report:', err);
+      message.error(err.message || 'Failed to generate PDF report');
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
+  const handleApproveCurrent = async () => {
+    const id = currentInstanceId;
+    if (!id) return;
+    try {
+      setApproveLoading(true);
+      const info = isMultiInstance ? (interpretationsByInstance[id]?.ecg_file || {}) : ecgInfo;
+      const uid = isMultiInstance ? interpretationsByInstance[id]?.ecg_file?.patient_id : userId;
+      if (!uid) throw new Error('Missing user ID');
+      await ecgAPI.updateECGFile(
+        uid,
+        id,
+        info.notes || '',
+        Array.isArray(info.tags) ? info.tags.join(', ') : (info.tags || ''),
+        true
+      );
+      if (!isMultiInstance) {
+        setEcgInfo({ ...ecgInfo, approved_status: true });
+        form.setFieldsValue({ ...form.getFieldsValue(), approved_status: true });
+      }
+      message.success('ECG approved successfully');
+    } catch (err) {
+      console.error('Approve error:', err);
+      message.error(err.message || 'Failed to approve ECG');
+    } finally {
+      setApproveLoading(false);
+    }
+  };
+
+  // Removed Update ECG modal/logic per request
+
+  const handleSubmitFeedback = async (values) => {
+    try {
+      const id = currentInstanceId;
+      await feedbackAPI.submitFeedback({
+        instance_id: id,
+        feedback: values.feedback,
+        tags: values.tags || ''
+      });
+      message.success('Feedback submitted');
+      setFeedbackOpen(false);
+    } catch (err) {
+      console.error('Feedback error:', err);
+      message.error(err.message || 'Failed to submit feedback');
     }
   };
 
@@ -374,116 +431,23 @@ const XAIResultPage = () => {
     );
   };
 
-  return (
-    <div className="page-container" style={{ padding: '20px' }}>
-      <Button 
-        icon={<ArrowLeftOutlined />} 
-        onClick={handleBack} 
-        style={{ marginBottom: '16px' }}
-      >
-        Back to ECG Viewer
-      </Button>
-      
-      <Card>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Title level={2}>ECG Interpretation Results</Title>
-        </div>
-        
-        {interpretationData?.ecg_file && (
-          <Card style={{ marginBottom: '16px' }}>
-            <Form
-              form={form}
-              layout="vertical"
-              onFinish={handleUpdateECG}
-              initialValues={{
-                notes: interpretationData.ecg_file.notes || '',
-                tags: Array.isArray(interpretationData.ecg_file.tags) 
-                  ? interpretationData.ecg_file.tags.join(', ') 
-                  : '',
-                approved_status: interpretationData.ecg_file.approved_status || false
-              }}
-            >
-              <Row gutter={16}>
-                <Col span={12}>
-                  <Form.Item
-                    name="notes"
-                    label="Notes"
-                    rules={[{ required: true, message: 'Please enter notes' }]}
-                  >
-                    <Input.TextArea rows={4} placeholder="Enter notes about this ECG" />
-                  </Form.Item>
-                </Col>
-                <Col span={12}>
-                  <Form.Item
-                    name="tags"
-                    label="Tags"
-                    rules={[{ required: true, message: 'Please enter tags' }]}
-                  >
-                    <Input placeholder="Enter tags separated by commas" />
-                  </Form.Item>
-                  
-                  <div style={{ marginBottom: '16px' }}>
-                    <Text strong>Status: </Text>
-                    <Tag color={ecgInfo.approved_status ? 'green' : 'orange'}>
-                      {ecgInfo.approved_status ? 'Approved' : 'Not Approved'}
-                    </Tag>
-                  </div>
-                </Col>
-              </Row>
-              
-              <Form.Item>
-                <Space>
-                  <Button type="primary" htmlType="submit" loading={updateLoading}>
-                    Update ECG Information
-                  </Button>
-                  {!ecgInfo.approved_status && (
-                    <Button 
-                      type="primary" 
-                      danger 
-                      onClick={handleApprove} 
-                      loading={approveLoading}
-                    >
-                      Approve ECG
-                    </Button>
-                  )}
-                  <Button
-                    type="primary"
-                    icon={<DownloadOutlined />}
-                    onClick={handleDownloadPDF}
-                    loading={pdfLoading}
-                  >
-                    Download PDF Report
-                  </Button>
-                </Space>
-              </Form.Item>
-            </Form>
-          </Card>
-        )}
-        
-        <Divider />
-        
-        {interpretationData && interpretationData.results && interpretationData.results.length > 0 ? (
-          <Tabs 
-            activeKey={activeTab} 
-            onChange={setActiveTab}
+  // Render panel for one instance (simplified when multiple)
+  const renderInstancePanel = (id, data) => {
+    return (
+      <div>
+        {data && data.results && data.results.length > 0 ? (
+          <Tabs
             type="card"
-            style={{ marginTop: '16px' }}
-            items={interpretationData.results.map((result, index) => ({
+            items={data.results.map((result, index) => ({
               key: index.toString(),
               label: (
                 <span>
                   {result.abnormality}
-                  <Tag 
-                    color={result.status === 'ok' ? 'green' : 'orange'} 
-                    style={{ marginLeft: '8px' }}
-                  >
+                  <Tag color={result.status === 'ok' ? 'green' : 'orange'} style={{ marginLeft: '8px' }}>
                     {result.status || 'N/A'}
                   </Tag>
                   {result.report?.validation && (
-                    <Tag 
-                      color={result.report.validation.status === 'pass' ? 'green' : 'orange'} 
-                      style={{ marginLeft: '4px' }}
-                    >
+                    <Tag color={result.report.validation.status === 'pass' ? 'green' : 'orange'} style={{ marginLeft: '4px' }}>
                       Validation: {result.report.validation.status}
                     </Tag>
                   )}
@@ -499,7 +463,111 @@ const XAIResultPage = () => {
             type="info" 
           />
         )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="page-container" style={{ padding: '20px' }}>
+      <Button 
+        icon={<ArrowLeftOutlined />} 
+        onClick={handleBack} 
+        style={{ marginBottom: '16px' }}
+      >
+        Back to ECG Viewer
+      </Button>
+      
+      <Card>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+          <Title level={2}>ECG Interpretation Results</Title>
+          <Space wrap>
+            <Button onClick={() => setFeedbackOpen(true)}>Doctor Feedback</Button>
+            <Button onClick={handleApproveCurrent} type="primary" danger loading={approveLoading}>Approve ECG</Button>
+            <Button onClick={() => (isMultiInstance ? handleDownloadPDFFor(currentInstanceId) : handleDownloadPDF())} icon={<DownloadOutlined />} loading={pdfLoading}>
+              Download PDF
+            </Button>
+          </Space>
+        </div>
+        
+        {/* Inline notes/tags section removed to avoid duplication */}
+        
+        <Divider />
+        {isMultiInstance ? (
+          <Tabs
+            activeKey={activeInstanceKey}
+            onChange={setActiveInstanceKey}
+            type="line"
+            items={instanceIds.map(id => ({
+              key: id,
+              label: id.length > 14 ? `${id.slice(0, 6)}…${id.slice(-6)}` : id,
+              children: renderInstancePanel(id, interpretationsByInstance[id])
+            }))}
+          />
+        ) : (
+          interpretationData && interpretationData.results && interpretationData.results.length > 0 ? (
+            <Tabs 
+              activeKey={activeTab} 
+              onChange={setActiveTab}
+              type="card"
+              style={{ marginTop: '16px' }}
+              items={interpretationData.results.map((result, index) => ({
+                key: index.toString(),
+                label: (
+                  <span>
+                    {result.abnormality}
+                    <Tag 
+                      color={result.status === 'ok' ? 'green' : 'orange'} 
+                      style={{ marginLeft: '8px' }}
+                    >
+                      {result.status || 'N/A'}
+                    </Tag>
+                    {result.report?.validation && (
+                      <Tag 
+                        color={result.report.validation.status === 'pass' ? 'green' : 'orange'} 
+                        style={{ marginLeft: '4px' }}
+                      >
+                        Validation: {result.report.validation.status}
+                      </Tag>
+                    )}
+                  </span>
+                ),
+                children: renderDiseaseTab(result, index)
+              }))}
+            />
+          ) : (
+            <Alert 
+              message="No interpretation results available" 
+              description="There are no disease interpretations available for this ECG." 
+              type="info" 
+            />
+          )
+        )}
       </Card>
+
+      {/* Doctor Feedback Modal */}
+      <Modal
+        title="Doctor Feedback"
+        open={feedbackOpen}
+        onCancel={() => setFeedbackOpen(false)}
+        footer={null}
+      >
+        <Form layout="vertical" onFinish={handleSubmitFeedback}>
+          <Form.Item name="feedback" label="Feedback" rules={[{ required: true, message: 'Please enter feedback' }]}>
+            <Input.TextArea rows={4} placeholder="Your clinical feedback" />
+          </Form.Item>
+          <Form.Item name="tags" label="Tags">
+            <Input placeholder="Comma separated" />
+          </Form.Item>
+          <Form.Item>
+            <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
+              <Button onClick={() => setFeedbackOpen(false)}>Cancel</Button>
+              <Button type="primary" htmlType="submit">Submit</Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* Update ECG Modal removed per request */}
     </div>
   );
 };

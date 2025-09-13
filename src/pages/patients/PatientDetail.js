@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-import { Card, Descriptions, Button, Space, Upload, List, Tag, message, Modal, Form, Input, Select, DatePicker, Tooltip, Typography, Progress } from 'antd';
+import { Card, Descriptions, Button, Space, Upload, List, Tag, message, Modal, Form, Input, Select, DatePicker, Tooltip, Typography, Progress, Checkbox } from 'antd';
 import { useParams, useNavigate } from 'react-router-dom';
 import { UploadOutlined, EditOutlined, DeleteOutlined, CopyOutlined, UserOutlined, MailOutlined, IdcardOutlined, DatabaseOutlined, ClockCircleOutlined, NumberOutlined, EyeOutlined, ExperimentOutlined, BarChartOutlined, FileTextOutlined } from '@ant-design/icons';
 
@@ -56,6 +56,7 @@ const PatientDetail = () => {
   const [xaiSelectOpen, setXaiSelectOpen] = useState(false);
   const [selectedDiseases, setSelectedDiseases] = useState([]);
   const [selectedInstanceId, setSelectedInstanceId] = useState(null);
+  const [multiSelectedInstances, setMultiSelectedInstances] = useState([]);
 
   const fetchPatient = async () => {
     try {
@@ -641,9 +642,43 @@ const PatientDetail = () => {
           <Button icon={<UploadOutlined />}>Upload ECG File</Button>
         </Upload>
 
-        {/* Overall Summary button removed per request */}
-
-        {/* Multi-instance interpret removed */}
+        {/* Multi-instance interpret controls */}
+        <div style={{ marginTop: 16, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span style={{ color: '#666' }}>Diseases:</span>
+          <Select
+            mode="multiple"
+            value={selectedDiseases}
+            onChange={setSelectedDiseases}
+            placeholder="Select diseases"
+            style={{ minWidth: 260 }}
+            options={Array.from(ALLOWED_DISEASES).map(d => ({ label: d, value: d }))}
+          />
+          <Button
+            type="primary"
+            onClick={() => {
+              const ids = multiSelectedInstances;
+              if (!ids || ids.length === 0) {
+                message.error('Select at least one instance');
+                return;
+              }
+              const diseases = normalizeDiseases(selectedDiseases);
+              if (diseases.length === 0) {
+                message.error('Select at least one disease');
+                return;
+              }
+              const params = new URLSearchParams();
+              ids.forEach(id => params.append('i', id));
+              diseases.forEach(d => params.append('d', d));
+              const first = ids[0];
+              navigate(`/xai/${first}?${params.toString()}`);
+            }}
+          >
+            Interpret Selected
+          </Button>
+          {multiSelectedInstances.length > 0 && (
+            <Tag color="blue">{multiSelectedInstances.length} selected</Tag>
+          )}
+        </div>
 
         <List
           className="ecg-file-list"
@@ -752,6 +787,18 @@ const PatientDetail = () => {
 
                         <List.Item
                           actions={[
+                            <Checkbox
+                              key="select"
+                              checked={multiSelectedInstances.includes(instanceId)}
+                              onChange={(e) => {
+                                const checked = e.target.checked;
+                                setMultiSelectedInstances(prev => {
+                                  const set = new Set(prev);
+                                  if (checked) set.add(instanceId); else set.delete(instanceId);
+                                  return Array.from(set);
+                                });
+                              }}
+                            />,
                             <Tooltip key="copy" title="Copy Instance ID">
                               <Button
                                 type="text"
@@ -769,13 +816,7 @@ const PatientDetail = () => {
                                 onClick={() => navigate(`/ecg-view/${file.user_id}/${instanceId}`)}
                               />
                             </Tooltip>,
-                            <Tooltip key="xai" title="View XAI analysis">
-                              <Button
-                                type="text"
-                                icon={<ExperimentOutlined />}
-                                onClick={() => openXaiSelector(instanceId)}
-                              />
-                            </Tooltip>
+                            
                           ]}
                         >
                           <Tooltip title={instanceId}>
