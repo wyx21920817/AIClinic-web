@@ -391,7 +391,7 @@ const ECGViewer = () => {
       if (!hasMoved) {
         ctx.moveTo(x, y);
         hasMoved = true;
-      } else {
+              } else {
         ctx.lineTo(x, y);
       }
     }
@@ -603,8 +603,8 @@ const ECGViewer = () => {
 
       if (selectedLead === "multiple") {
         // Multiple模式：使用DicomECGViewer
-        const viewer = new DicomECGViewer(arrayBuffer, canvasId, 0);
-        viewerRef.current = viewer;
+      const viewer = new DicomECGViewer(arrayBuffer, canvasId, 0);
+      viewerRef.current = viewer;
         console.log('Viewer created:', viewer);
 
         // 为了比较数据一致性，也解析一下数据
@@ -621,11 +621,11 @@ const ECGViewer = () => {
           }))
         });
 
-        console.log('Loading canvas...');
+      console.log('Loading canvas...');
         try {
           console.log('Loading ECG canvas...');
-          await viewer.loadCanvas();
-          console.log('Canvas loaded successfully');
+      await viewer.loadCanvas();
+      console.log('Canvas loaded successfully');
         } catch (loadError) {
           console.error('Error loading canvas:', loadError);
           setError(`Failed to load canvas: ${loadError.message}`);
@@ -657,7 +657,7 @@ const ECGViewer = () => {
           });
 
           // 使用setTimeout确保状态更新后再绘制
-          setTimeout(() => {
+      setTimeout(() => {
             drawSingleLead(canvasId, leadIndex, parsedLeads);
           }, 0);
         } else {
@@ -712,7 +712,7 @@ const ECGViewer = () => {
         console.log('DICOM file loaded successfully');
       } catch (error) {
         console.error('Detailed error:', {
-          message: error.message,
+        message: error.message,
           stack: error.stack,
           name: error.name,
           response: error.response
@@ -907,9 +907,9 @@ const ECGViewer = () => {
 
         if (data.instance_id && String(data.instance_id) !== String(instanceId)) {
           message.info('Redirecting to new diagnosis instance...');
-          setTimeout(() => {
+    setTimeout(() => {
             navigate(`/ecg-view/${userId}/${data.instance_id}`);
-          }, 500);
+    }, 500);
         }
       }
     } catch (error) {
@@ -968,7 +968,7 @@ const ECGViewer = () => {
             <Option value="10">V5</Option>
             <Option value="11">V6</Option>
           </Select>
-        </div>
+          </div>
 
         {/* Weasis-like 参数控制 */}
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
@@ -978,7 +978,7 @@ const ECGViewer = () => {
               <Option value={25}>25</Option>
               <Option value={50}>50</Option>
             </Select>
-          </div>
+        </div>
           <div>
             <span style={{ marginRight: 8 }}>Gain (mm/mV):</span>
             <Select value={mmPerMV} style={{ width: 120 }} onChange={setMmPerMV}>
@@ -986,7 +986,7 @@ const ECGViewer = () => {
               <Option value={10}>10</Option>
               <Option value={20}>20</Option>
             </Select>
-          </div>
+        </div>
           <div>
             <span style={{ marginRight: 8 }}>Display format:</span>
             <Select value={displayPreset} style={{ width: 160 }} onChange={setDisplayPreset}>
@@ -994,9 +994,9 @@ const ECGViewer = () => {
               <Option value="2x5">2 x 5s</Option>
               <Option value="4x2.5">4 x 2.5s</Option>
             </Select>
-          </div>
-        </div>
-
+      </div>
+      </div>
+      
         {/* ECG参数显示 - 参照MedDream样式 */}
         {selectedLead !== "multiple" && waveformData && (
           <div style={{
@@ -1013,7 +1013,7 @@ const ECGViewer = () => {
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#6c757d' }}>Sampling Rate:</span>
                 <span style={{ fontWeight: 'bold', color: '#495057' }}>{samplingRate} Hz</span>
-              </div>
+      </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#6c757d' }}>Duration:</span>
                 <span style={{ fontWeight: 'bold', color: '#495057' }}>
@@ -1022,7 +1022,7 @@ const ECGViewer = () => {
                     'N/A'
                   }
                 </span>
-              </div>
+      </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#6c757d' }}>Samples:</span>
                 <span style={{ fontWeight: 'bold', color: '#495057' }}>
@@ -1030,14 +1030,14 @@ const ECGViewer = () => {
                     waveformData[parseInt(selectedLead)].length.toLocaleString() :
                     'N/A'
                   }
-                </span>
-              </div>
+        </span>
+      </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#6c757d' }}>Scale:</span>
                 <span style={{ fontWeight: 'bold', color: '#495057' }}>10mm/mV</span>
-              </div>
-            </div>
-          </div>
+      </div>
+      </div>
+      </div>
         )}
 
 
@@ -1094,70 +1094,70 @@ const ECGViewer = () => {
                     Update Diagnose
                   </Button>
                 )}
-              </div>
+                </div>
             }
             style={{ marginTop: '20px' }}
           >
             {dicomTags['x00104000'] ? (
-              <Row gutter={16}>
-                <Col span={12}>
-                  <Card type="inner" title="1D Model Results">
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                      <thead>
-                        <tr>
-                          <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Type</th>
-                          <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Probability</th>
-                        </tr>
-                      </thead>
-                      <tbody>
+            <Row gutter={16}>
+              <Col span={12}>
+                <Card type="inner" title="1D Model Results">
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr>
+                        <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Type</th>
+                        <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Probability</th>
+                      </tr>
+                    </thead>
+                    <tbody>
                         {(dicomTags['x00104000']?.split(' | ')[0] || "")
                           .split('; ')
                           .filter(Boolean)
                           .map(item => {
-                            const [type, prob] = item.split(':');
-                            return (
-                              <tr key={type}>
-                                <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>{type}</td>
-                                <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                        const [type, prob] = item.split(':');
+                        return (
+                          <tr key={type}>
+                            <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>{type}</td>
+                            <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
                                   {prob ? `${(parseFloat(prob) * 100).toFixed(1)}%` : 'N/A'}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                      </tbody>
-                    </table>
-                  </Card>
-                </Col>
-                <Col span={12}>
-                  <Card type="inner" title="ResNet Top5 Results">
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                      <thead>
-                        <tr>
-                          <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Type</th>
-                          <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Probability</th>
-                        </tr>
-                      </thead>
-                      <tbody>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </Card>
+              </Col>
+              <Col span={12}>
+                <Card type="inner" title="ResNet Top5 Results">
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr>
+                        <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Type</th>
+                        <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Probability</th>
+                      </tr>
+                    </thead>
+                    <tbody>
                         {(dicomTags['x00104000']?.split(' | ')[1] || "")
                           .replace('ResNet Top5: ', '')
                           .split('; ')
                           .filter(Boolean)
                           .map(item => {
-                            const [type, prob] = item.split(':');
-                            return (
-                              <tr key={type}>
-                                <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>{type}</td>
-                                <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                        const [type, prob] = item.split(':');
+                        return (
+                          <tr key={type}>
+                            <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>{type}</td>
+                            <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
                                   {prob ? `${(parseFloat(prob) * 100).toFixed(1)}%` : 'N/A'}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                      </tbody>
-                    </table>
-                  </Card>
-                </Col>
-              </Row>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </Card>
+              </Col>
+            </Row>
             ) : (
               <div style={{ textAlign: 'center', padding: '20px', color: '#666' }}>
                 No AI diagnosis available for this ECG file.

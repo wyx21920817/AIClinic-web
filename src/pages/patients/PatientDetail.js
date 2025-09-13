@@ -17,7 +17,7 @@ dayjs.extend(utc);
 dayjs.extend(timezone);
 const PERTH_TZ = 'Australia/Perth';
 
- 
+
 
 const PageContainer = styled.div`
   padding: 24px;
@@ -685,7 +685,55 @@ const PatientDetail = () => {
                 description={
                   <Space direction="vertical" style={{ width: '100%' }}>
                     <div>created at: {dayjs(file.created_at).tz(PERTH_TZ).format('YYYY-MM-DD HH:mm:ss')} ({PERTH_TZ})</div>
-                    {file.content && <div>Notes: {file.content}</div>}
+                    {file.content && (
+                      <div>
+                        Notes:
+                        <div style={{ marginTop: 8 }}>
+                          {(() => {
+                            // Try to parse Orthanc-style notes string and show key info only
+                            const raw = String(file.content || '').trim();
+                            const tryParse = (text) => {
+                              try {
+                                // If already valid JSON
+                                return JSON.parse(text);
+                              } catch (_) {
+                                try {
+                                  // Convert single quotes to double quotes and quote keys if needed
+                                  const normalized = text
+                                    .replace(/\n/g, ' ') // remove newlines
+                                    .replace(/'/g, '"') // single -> double
+                                    .replace(/([,{\s])([A-Za-z0-9_]+)\s*:/g, '$1"$2":');
+                                  return JSON.parse(normalized);
+                                } catch (e) {
+                                  return null;
+                                }
+                              }
+                            };
+                            const obj = tryParse(raw);
+                            if (!obj) {
+                              // Fallback: show truncated raw string
+                              return <span style={{ color: '#666' }}>{raw.slice(0, 200)}{raw.length > 200 ? '…' : ''}</span>;
+                            }
+                            const pick = (k) => obj[k] ?? obj[k.toLowerCase()] ?? obj[k.toUpperCase()];
+                            const rows = [
+                              { label: 'File Size', value: pick('FileSize') },
+                              { label: 'SOP Instance UID', value: pick('SOPInstanceUID') },
+                              { label: 'Instance Number', value: pick('InstanceNumber') },
+                              { label: 'File UUID', value: pick('FileUuid') },
+                              { label: 'ID', value: pick('ID') },
+                              { label: 'Type', value: pick('Type') }
+                            ].filter(r => r.value !== undefined && r.value !== null && r.value !== '');
+                            return (
+                              <ul style={{ margin: 0, paddingLeft: 18, color: '#555' }}>
+                                {rows.map(r => (
+                                  <li key={r.label}><b>{r.label}:</b> <span style={{ wordBreak: 'break-all' }}>{String(r.value)}</span></li>
+                                ))}
+                              </ul>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                    )}
                     {file.tags && (
                       <div>
                         Tags:
