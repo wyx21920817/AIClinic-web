@@ -6,14 +6,14 @@ import {
 } from 'ecg-dicom-web-viewer';
 import dicomParser from 'dicom-parser';
 import ReadECG from '../utils/ReadECG';
-import { Card, Space, Typography, Upload, Progress, Row, Col, Button, message, Select } from 'antd'; // ⭐修改：引入 Select
+import { Card, Space, Typography, Upload, Progress, Row, Col, Button, message, Select } from 'antd'; // ⭐ Modified: Import Select component
 import { InboxOutlined, FileImageOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import request from '../services/api/request';
 import { API_ENDPOINTS, API_BASE_URL } from '../services/api/config';
 
 const { Title } = Typography;
 const { Dragger } = Upload;
-const { Option } = Select; // ⭐新增
+const { Option } = Select;
 
 // DICOM tag description mapping
 const DICOM_TAG_DESCRIPTIONS = {
@@ -94,19 +94,19 @@ const ECGViewer = () => {
   const viewerRef = React.useRef(null);
   const containerId = 'ecg-container';
 
-  const [selectedLead, setSelectedLead] = React.useState("multiple"); // ⭐新增
-  const [dicomArrayBuffer, setDicomArrayBuffer] = React.useState(null); // 保存DICOM数据
-  const [waveformData, setWaveformData] = React.useState(null); // 二维数组：[lead][samples]
+  const [selectedLead, setSelectedLead] = React.useState("multiple"); // ⭐ New addition
+  const [dicomArrayBuffer, setDicomArrayBuffer] = React.useState(null); // Store DICOM data
+  const [waveformData, setWaveformData] = React.useState(null); // 2D array: [lead][samples]
   const [samplingRate, setSamplingRate] = React.useState(500);
   const [leadNames, setLeadNames] = React.useState([]);
-  const [currentCanvasId, setCurrentCanvasId] = React.useState(null); // 保存当前canvas的ID
+  const [currentCanvasId, setCurrentCanvasId] = React.useState(null); // Store current canvas ID
 
-  // 可调显示参数（参照 Weasis）
-  const [mmPerSecond, setMmPerSecond] = React.useState(25); // 速度：25/50 mm/s
-  const [mmPerMV, setMmPerMV] = React.useState(10);        // 增益：5/10/20 mm/mV
+  // Adjustable display parameters (reference Weasis)
+  const [mmPerSecond, setMmPerSecond] = React.useState(25); // Speed: 25/50 mm/s
+  const [mmPerMV, setMmPerMV] = React.useState(10);        // Gain: 5/10/20 mm/mV
   const [displayPreset, setDisplayPreset] = React.useState('1x10'); // 1x10 | 2x5 | 4x2.5
 
-  // 解析 WaveformSequence (5400,0100) -> Waveform Data (5400,1010)
+  // Parse WaveformSequence (5400,0100) -> Waveform Data (5400,1010)
   const parseWaveformData = React.useCallback((dataSet, byteArray) => {
     console.log('=== DICOM Waveform Parsing Debug ===');
 
@@ -119,7 +119,7 @@ const ECGViewer = () => {
     const transferSyntax = dataSet.string('x00020010') || '';
     const isExplicitVR = transferSyntax.includes('1.2.840.10008.1.2.1'); // Explicit VR Little Endian
 
-    // 读取通道数（导联数），若不可得则默认 12
+    // Read channel count (lead count), default to 12 if unavailable
     const channelCount = dataSet.intString('x003a0001') || 12;
     const samplingRate = dataSet.intString('x003a0005') || 500;
 
@@ -170,7 +170,7 @@ const ECGViewer = () => {
             flat[j] = dataView.getInt16(j * 2, true);
           }
 
-          // 若为多通道交织，按通道拆分并累积
+          // If multi-channel interleaved, split by channel and accumulate
           if (flat.length % channelCount === 0) {
             const samplesPerLead = flat.length / channelCount;
             for (let c = 0; c < channelCount; c++) {
@@ -179,7 +179,7 @@ const ECGViewer = () => {
               }
             }
           } else {
-            // 无法整除时，按单通道处理为一个导联（退路）
+            // When not evenly divisible, process as single channel for one lead (fallback)
             accumPerLead[0].push(...Array.from(flat));
           }
 
@@ -190,7 +190,7 @@ const ECGViewer = () => {
             channelCount,
             samplingRate
           });
-          break; // 本 item 完成
+          break; // This item completed
         }
 
         const next = dataStart + valueLength;
@@ -198,7 +198,7 @@ const ECGViewer = () => {
         offset = next;
       }
 
-      // Fallback：有些解析器会在 item 上挂载 dataSet，可直接读元素偏移
+      // Fallback: Some parsers mount dataSet on item, can directly read element offset
       if (allLeads.length <= itemIndex && item.dataSet && item.dataSet.elements) {
         const el = item.dataSet.elements['x54001010'];
         if (el && el.length > 0) {
@@ -223,7 +223,7 @@ const ECGViewer = () => {
       }
     });
 
-    // 将累积的 number[] 转成 Int16Array，去掉空导联
+    // Convert accumulated number[] to Int16Array, remove empty leads
     for (let c = 0; c < accumPerLead.length; c++) {
       if (accumPerLead[c].length > 0) {
         allLeads.push(Int16Array.from(accumPerLead[c]));
@@ -236,7 +236,7 @@ const ECGViewer = () => {
       samplingRate: samplingRate + 'Hz'
     });
 
-    // 添加每个导联的详细信息
+    // Add detailed information for each lead
     allLeads.forEach((lead, idx) => {
       if (lead && lead.length > 0) {
         const min = Math.min(...lead);
@@ -256,7 +256,7 @@ const ECGViewer = () => {
     return allLeads;
   }, []);
 
-  // 专业ECG单导联绘制 - 参照MedDream样式
+  // Professional ECG single lead rendering - reference MedDream style
   const drawSingleLead = React.useCallback((canvasId, leadIndex, waveformDataToUse = null) => {
     console.log('drawSingleLead called with canvasId:', canvasId, 'leadIndex:', leadIndex);
     const canvas = document.getElementById(canvasId);
@@ -265,13 +265,13 @@ const ECGViewer = () => {
       return;
     }
 
-    // 检查canvas元素类型
+    // Check canvas element type
     if (canvas.tagName !== 'CANVAS') {
       console.error('Element is not a canvas:', canvas.tagName, canvas);
       return;
     }
 
-    // 使用传入的waveformData或状态中的waveformData
+    // Use passed waveformData or waveformData from state
     const dataToUse = waveformDataToUse || waveformData;
     if (!dataToUse || !dataToUse[leadIndex]) {
       console.log('Waveform data not ready for lead:', leadIndex, 'dataToUse:', dataToUse);
@@ -283,11 +283,11 @@ const ECGViewer = () => {
     const ctx = canvas.getContext('2d');
     const rect = canvas.getBoundingClientRect();
 
-    // 为轴标签预留空间 - 更专业的布局
-    const paddingLeft = 80;   // 左侧电压标尺空间
-    const paddingBottom = 50; // 底部时间标尺空间
-    const paddingTop = 40;    // 顶部导联标签空间
-    const paddingRight = 30;  // 右侧空间
+    // Reserve space for axis labels - more professional layout
+    const paddingLeft = 80;   // Left side voltage scale space
+    const paddingBottom = 50; // Bottom time scale space
+    const paddingTop = 40;    // Top lead label space
+    const paddingRight = 30;  // Right side space
 
     const contentWidth = rect.width - paddingLeft - paddingRight;
     const contentHeight = rect.height - paddingTop - paddingBottom;
@@ -297,14 +297,14 @@ const ECGViewer = () => {
     ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
     ctx.clearRect(0, 0, rect.width, rect.height);
 
-    // ECG标准参数 - 由 UI 控制
-    const pixelsPerMM = 6;  // 1mm = 6px（固定像素密度）
+    // ECG standard parameters - controlled by UI
+    const pixelsPerMM = 6;  // 1mm = 6px (fixed pixel density)
     const pixelsPerSecond = mmPerSecond * pixelsPerMM;
     const pixelsPerMV = mmPerMV * pixelsPerMM;
-    const smallGridSize = pixelsPerMM; // 小网格：6px = 1mm
-    const largeGridSize = pixelsPerMM * 5; // 大网格：30px = 5mm
+    const smallGridSize = pixelsPerMM; // Small grid: 6px = 1mm
+    const largeGridSize = pixelsPerMM * 5; // Large grid: 30px = 5mm
 
-    // 调试信息：验证比例尺
+    // Debug info: verify scale
     console.log('ECG Scale Verification:', {
       mmPerSecond,
       mmPerMV,
@@ -317,29 +317,29 @@ const ECGViewer = () => {
       contentHeight
     });
 
-    // 背景色 - 类似MedDream的浅色背景
+    // Background color - similar to MedDream light background
     ctx.fillStyle = '#fefefe';
     ctx.fillRect(0, 0, rect.width, rect.height);
 
-    // 计算ECG数据的实际时间范围
+    // Calculate actual time range of ECG data
     const samples = dataToUse[leadIndex];
     const actualDuration = samples.length / samplingRate;
-    // 根据显示格式限制时间窗
+    // Limit time window based on display format
     const presetSeconds = displayPreset === '1x10' ? 10 : displayPreset === '2x5' ? 5 : 2.5;
     const maxDisplayTime = Math.min(actualDuration, presetSeconds);
     const maxDisplayX = paddingLeft + maxDisplayTime * pixelsPerSecond;
 
-    // 计算电压轴的实际显示范围（上下1.5mV）
+    // Calculate actual display range of voltage axis (±1.5mV)
     const centerY = paddingTop + contentHeight / 2;
-    const voltageRange = 1.5; // 上下1.5mV
-    const minDisplayY = centerY - (voltageRange * pixelsPerMV); // 上边界
-    const maxDisplayY = centerY + (voltageRange * pixelsPerMV); // 下边界
+    const voltageRange = 1.5; // ±1.5mV
+    const minDisplayY = centerY - (voltageRange * pixelsPerMV); // Upper boundary
+    const maxDisplayY = centerY + (voltageRange * pixelsPerMV); // Lower boundary
 
-    // 绘制ECG网格 - 只在有数据的区域绘制
-    ctx.strokeStyle = '#ff6b6b'; // 更鲜艳的红色小网格
+    // Draw ECG grid - only in data area
+    ctx.strokeStyle = '#ff6b6b'; // More vibrant red small grid
     ctx.lineWidth = 0.3;
 
-    // 小网格 (1mm) - 只在1.5mV范围内绘制
+    // Small grid (1mm) - only draw within 1.5mV range
     for (let x = paddingLeft; x <= maxDisplayX; x += smallGridSize) {
       ctx.beginPath();
       ctx.moveTo(x, minDisplayY);
@@ -353,7 +353,7 @@ const ECGViewer = () => {
       ctx.stroke();
     }
 
-    // 大网格 (5mm) - 更明显的红色，只在1.5mV范围内绘制
+    // Large grid (5mm) - more prominent red, only draw within 1.5mV range
     ctx.strokeStyle = '#ff6b6b';
     ctx.lineWidth = 0.8;
     for (let x = paddingLeft; x <= maxDisplayX; x += largeGridSize) {
@@ -369,9 +369,9 @@ const ECGViewer = () => {
       ctx.stroke();
     }
 
-    // 绘制ECG波形
+    // Draw ECG waveform
 
-    // 波形颜色 - 更专业的样式
+    // Waveform color - more professional style
     ctx.beginPath();
     ctx.strokeStyle = '#1a365d';
     ctx.lineWidth = 1.5;
@@ -384,20 +384,20 @@ const ECGViewer = () => {
       const x = paddingLeft + t * pixelsPerSecond;
       if (x > rect.width - paddingRight) break;
 
-      // 转换电压值到像素位置 (注意ECG的Y轴是反向的)
-      const voltageMV = samples[i] / 1000; // 转换为mV
+      // Convert voltage value to pixel position (note ECG Y-axis is inverted)
+      const voltageMV = samples[i] / 1000; // Convert to mV
       const y = centerY - (voltageMV * pixelsPerMV);
 
       if (!hasMoved) {
         ctx.moveTo(x, y);
         hasMoved = true;
-              } else {
+      } else {
         ctx.lineTo(x, y);
       }
     }
     ctx.stroke();
 
-    // 添加基线参考线 - 更精细的虚线，只在有数据的区域
+    // Add baseline reference line - finer dashed line, only in data area
     ctx.strokeStyle = '#ff6b6b';
     ctx.lineWidth = 0.5;
     ctx.setLineDash([3, 3]);
@@ -407,31 +407,31 @@ const ECGViewer = () => {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // 导联标签 - 更专业的样式
+    // Lead label - more professional style
     const leadName = leadNames[leadIndex] || `Lead ${leadIndex + 1}`;
     ctx.fillStyle = '#2d3748';
     ctx.font = 'bold 16px Arial, sans-serif';
     ctx.textAlign = 'left';
     ctx.fillText(leadName, paddingLeft, paddingTop - 8);
 
-    // 添加时间标尺 - 更精确的刻度
+    // Add time scale - more precise markings
     ctx.fillStyle = '#4a5568';
     ctx.font = '11px Arial, sans-serif';
     ctx.textAlign = 'center';
 
-    // 在网格下方绘制时间标记
+    // Draw time markers below grid
     const timeScaleY = rect.height - 15;
 
-    // 计算显示的时间范围，基于实际ECG数据长度
-    const maxTime = Math.min(actualDuration, 10); // 使用实际ECG数据长度，限制最大显示10秒
+    // Calculate display time range based on actual ECG data length
+    const maxTime = Math.min(actualDuration, 10); // Use actual ECG data length, limit max display to 10 seconds
 
-    // 智能时间标注 - 根据duration调整密度
+    // Smart time annotation - adjust density based on duration
     ctx.strokeStyle = '#4a5568';
     ctx.lineWidth = 1;
 
-    // 简化时间标注 - 直接使用0.2秒间隔
-    let timeInterval = 0.2; // 固定0.2秒间隔
-    let labelPrecision = 1; // 显示0.1秒精度
+    // Simplified time annotation - directly use 0.2 second intervals
+    let timeInterval = 0.2; // Fixed 0.2 second interval
+    let labelPrecision = 1; // Display 0.1 second precision
 
     console.log('=== ECG Time Annotation Settings ===');
     console.log('Max Time:', maxTime.toFixed(2), 'seconds');
@@ -443,15 +443,15 @@ const ECGViewer = () => {
     for (let t = 0; t <= maxTime; t += timeInterval) {
       const x = paddingLeft + t * pixelsPerSecond;
 
-      // 只绘制在有数据的范围内的刻度
+      // Only draw markings within data range
       if (x >= paddingLeft && x <= maxDisplayX) {
-        // 绘制时间标记线
+        // Draw time marker line
         ctx.beginPath();
         ctx.moveTo(x, rect.height - paddingBottom + 5);
         ctx.lineTo(x, rect.height - paddingBottom + 30);
         ctx.stroke();
 
-        // 绘制时间标签（根据精度显示）
+        // Draw time label (display based on precision)
         const timeLabel = labelPrecision === 0 ?
           `${t.toFixed(0)}` :
           `${t.toFixed(labelPrecision)}`;
@@ -459,17 +459,17 @@ const ECGViewer = () => {
       }
     }
 
-    // 智能小网格标注 - 根据大网格间隔调整
+    // Smart small grid annotation - adjust based on large grid interval
     ctx.strokeStyle = '#ff6b6b';
     ctx.lineWidth = 0.3;
 
-    // 小网格间隔为大网格的1/5 (0.2/5 = 0.04秒)
+    // Small grid interval is 1/5 of large grid (0.2/5 = 0.04 seconds)
     const smallGridInterval = 0.04;
 
     for (let t = 0; t <= maxTime; t += smallGridInterval) {
       const x = paddingLeft + t * pixelsPerSecond;
 
-      // 只绘制在有数据的范围内且不是大网格线的刻度
+      // Only draw markings within data range and not large grid lines
       if (x >= paddingLeft && x <= maxDisplayX && Math.abs(t % timeInterval) > 0.01) {
         ctx.beginPath();
         ctx.moveTo(x, rect.height - paddingBottom + 10);
@@ -478,30 +478,30 @@ const ECGViewer = () => {
       }
     }
 
-    // 添加电压标尺 - 更精确的刻度
+    // Add voltage scale - more precise markings
     ctx.textAlign = 'right';
     ctx.font = '11px Arial, sans-serif';
 
-    // 在网格左侧绘制电压标记
+    // Draw voltage markers on left side of grid
     const voltageScaleX = 45;
 
-    // 使用之前定义的电压范围
+    // Use previously defined voltage range
 
-    // 标注所有大网格线（每0.5mV间隔）
+    // Mark all large grid lines (every 0.5mV interval)
     ctx.strokeStyle = '#4a5568';
     ctx.lineWidth = 1;
-    for (let voltage = -voltageRange; voltage <= voltageRange; voltage += 0.5) { // 0.5mV间隔
+    for (let voltage = -voltageRange; voltage <= voltageRange; voltage += 0.5) { // 0.5mV interval
       const y = centerY - (voltage * pixelsPerMV);
 
-      // 只绘制在1.5mV范围内的刻度
+      // Only draw markings within 1.5mV range
       if (y >= minDisplayY && y <= maxDisplayY) {
-        // 绘制电压标记线
+        // Draw voltage marker line
         ctx.beginPath();
         ctx.moveTo(paddingLeft - 6, y);
         ctx.lineTo(paddingLeft, y);
         ctx.stroke();
 
-        // 绘制电压标签（每0.5mV显示一次）
+        // Draw voltage label (display every 0.5mV)
         const voltageText = voltage === 0 ? '0' :
           voltage > 0 ? `+${voltage.toFixed(1)}` :
             `${voltage.toFixed(1)}`;
@@ -509,13 +509,13 @@ const ECGViewer = () => {
       }
     }
 
-    // 标注小网格线（每0.1mV间隔）
+    // Mark small grid lines (every 0.1mV interval)
     ctx.strokeStyle = '#ff6b6b';
     ctx.lineWidth = 0.3;
-    for (let voltage = -voltageRange; voltage <= voltageRange; voltage += 0.1) { // 0.1mV间隔
+    for (let voltage = -voltageRange; voltage <= voltageRange; voltage += 0.1) { // 0.1mV interval
       const y = centerY - (voltage * pixelsPerMV);
 
-      // 只绘制在1.5mV范围内且不是大网格线的刻度
+      // Only draw markings within 1.5mV range and not large grid lines
       if (y >= minDisplayY && y <= maxDisplayY && Math.abs(voltage % 0.5) > 0.01) {
         ctx.beginPath();
         ctx.moveTo(paddingLeft - 3, y);
@@ -524,7 +524,7 @@ const ECGViewer = () => {
       }
     }
 
-    // 绘制基线（0mV）的特殊标记
+    // Draw special marking for baseline (0mV)
     ctx.beginPath();
     ctx.moveTo(paddingLeft - 6, centerY);
     ctx.lineTo(paddingLeft, centerY);
@@ -532,11 +532,11 @@ const ECGViewer = () => {
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // 添加轴标签 - 更专业的样式
+    // Add axis labels - more professional style
     ctx.font = 'bold 13px Arial, sans-serif';
     ctx.fillStyle = '#2d3748';
 
-    // Y轴标签（电压）
+    // Y-axis label (voltage)
     ctx.save();
     ctx.translate(45, centerY);
     ctx.rotate(-Math.PI / 2);
@@ -544,13 +544,13 @@ const ECGViewer = () => {
     ctx.fillText('Amplitude (mV)', 0, 0);
     ctx.restore();
 
-    // X轴标签（时间）
+    // X-axis label (time)
     ctx.textAlign = 'center';
     ctx.fillText('Time (s)', paddingLeft + contentWidth / 2, rect.height - 5);
 
     console.log('Single lead drawn successfully for lead:', leadIndex);
   }, [waveformData, samplingRate, leadNames]);
-  // 加载DICOM文件的函数 - 使用 useCallback 优化
+  // Function to load DICOM file - optimized with useCallback
   const loadDicomFile = React.useCallback(async (arrayBuffer, event) => {
     try {
       const fileName = event?.target?.files?.[0]?.name || 'unknown';
@@ -573,7 +573,7 @@ const ECGViewer = () => {
         return;
       }
 
-      // 清理之前的遮罩层
+      // Clear previous overlay
       const existingOverlay = document.getElementById('lead-overlay');
       if (existingOverlay) {
         existingOverlay.remove();
@@ -593,21 +593,21 @@ const ECGViewer = () => {
       canvas.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
       canvas.style.background = '#fefefe';
       container.appendChild(canvas);
-      setCurrentCanvasId(canvasId); // 保存canvas ID到状态
+      setCurrentCanvasId(canvasId); // Save canvas ID to state
 
       console.log('Creating ECG viewer...');
-      const leadIndex = selectedLead === "multiple" ? 0 : parseInt(selectedLead); // ⭐新增
+      const leadIndex = selectedLead === "multiple" ? 0 : parseInt(selectedLead); // ⭐ New addition
       const leadDisplayNames = ['Lead I', 'Lead II', 'Lead III', 'aVR', 'aVL', 'aVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6'];
       const nameView = selectedLead === "multiple" ? '' : (leadDisplayNames[leadIndex] || '');
       console.log('Lead index:', leadIndex, 'Selected lead:', selectedLead, 'nameView:', nameView);
 
       if (selectedLead === "multiple") {
-        // Multiple模式：使用DicomECGViewer
-      const viewer = new DicomECGViewer(arrayBuffer, canvasId, 0);
-      viewerRef.current = viewer;
+        // Multiple mode: use DicomECGViewer
+        const viewer = new DicomECGViewer(arrayBuffer, canvasId, 0);
+        viewerRef.current = viewer;
         console.log('Viewer created:', viewer);
 
-        // 为了比较数据一致性，也解析一下数据
+        // Also parse data for comparison of data consistency
         const parentByteArray = new Uint8Array(arrayBuffer);
         const parentDataSet = dicomParser.parseDicom(parentByteArray);
         const parsedLeads = parseWaveformData(parentDataSet, parentByteArray);
@@ -621,17 +621,17 @@ const ECGViewer = () => {
           }))
         });
 
-      console.log('Loading canvas...');
+        console.log('Loading canvas...');
         try {
           console.log('Loading ECG canvas...');
-      await viewer.loadCanvas();
-      console.log('Canvas loaded successfully');
+          await viewer.loadCanvas();
+          console.log('Canvas loaded successfully');
         } catch (loadError) {
           console.error('Error loading canvas:', loadError);
           setError(`Failed to load canvas: ${loadError.message}`);
         }
       } else {
-        // Single模式：使用简化的手工解析（隐式长度 4 字节），解析所有导联
+        // Single mode: use simplified manual parsing (implicit length 4 bytes), parse all leads
         console.log('Single lead mode selected, parsing waveform for lead:', leadIndex, '(', nameView, ')');
         const parentByteArray = new Uint8Array(arrayBuffer);
         const parentDataSet = dicomParser.parseDicom(parentByteArray);
@@ -646,7 +646,7 @@ const ECGViewer = () => {
         if (parsedLeads && parsedLeads.length > 0) {
           setWaveformData(parsedLeads);
 
-          // 添加调试信息，确保数据一致性
+          // Add debug info to ensure data consistency
           console.log('Single lead parsed data:', {
             leadIndex,
             leadName: nameView,
@@ -656,8 +656,8 @@ const ECGViewer = () => {
             firstFewSamples: parsedLeads[leadIndex]?.slice(0, 10)
           });
 
-          // 使用setTimeout确保状态更新后再绘制
-      setTimeout(() => {
+          // Use setTimeout to ensure drawing after state update
+          setTimeout(() => {
             drawSingleLead(canvasId, leadIndex, parsedLeads);
           }, 0);
         } else {
@@ -705,14 +705,14 @@ const ECGViewer = () => {
           }
         }
         setDicomTags(tags);
-        setDicomArrayBuffer(response); // 保存arrayBuffer用于后续重新加载
+        setDicomArrayBuffer(response); // Save arrayBuffer for subsequent reloading
 
 
         await loadDicomFile(response);
         console.log('DICOM file loaded successfully');
       } catch (error) {
         console.error('Detailed error:', {
-        message: error.message,
+          message: error.message,
           stack: error.stack,
           name: error.name,
           response: error.response
@@ -738,9 +738,9 @@ const ECGViewer = () => {
         viewerRef.current = null;
       }
     };
-  }, [instanceId, loadDicomFile, userId]); // 只在instanceId变化时重新加载
+  }, [instanceId, loadDicomFile, userId]); // Only reload when instanceId changes
 
-  // 单独处理selectedLead变化
+  // Handle selectedLead changes separately
   React.useEffect(() => {
     if (dicomArrayBuffer) {
       console.log('Lead changed, reloading ECG with new lead:', selectedLead);
@@ -748,13 +748,13 @@ const ECGViewer = () => {
     }
   }, [selectedLead, dicomArrayBuffer, loadDicomFile]);
 
-  // 当waveformData更新且selectedLead为single模式时，重新绘制
+  // Redraw when waveformData updates and selectedLead is in single mode
   React.useEffect(() => {
     if (waveformData && selectedLead !== "multiple" && selectedLead !== null && currentCanvasId) {
       const leadIndex = parseInt(selectedLead);
       if (!isNaN(leadIndex)) {
         console.log('WaveformData updated, redrawing single lead:', leadIndex, 'canvasId:', currentCanvasId);
-        // 使用setTimeout确保DOM已更新
+        // Use setTimeout to ensure DOM is updated
         setTimeout(() => {
           drawSingleLead(currentCanvasId, leadIndex, waveformData);
         }, 100);
@@ -907,9 +907,9 @@ const ECGViewer = () => {
 
         if (data.instance_id && String(data.instance_id) !== String(instanceId)) {
           message.info('Redirecting to new diagnosis instance...');
-    setTimeout(() => {
+          setTimeout(() => {
             navigate(`/ecg-view/${userId}/${data.instance_id}`);
-    }, 500);
+          }, 500);
         }
       }
     } catch (error) {
@@ -946,7 +946,7 @@ const ECGViewer = () => {
     >
       <Space direction="vertical" style={{ width: '100%' }} size="large">
 
-        {/* ⭐新增：导联选择器 */}
+        {/* ⭐ New addition: Lead selector */}
         <div>
           <span style={{ marginRight: 8 }}>Select Lead:</span>
           <Select
@@ -968,9 +968,9 @@ const ECGViewer = () => {
             <Option value="10">V5</Option>
             <Option value="11">V6</Option>
           </Select>
-          </div>
+        </div>
 
-        {/* Weasis-like 参数控制 */}
+        {/* Weasis-like parameter controls */}
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <div>
             <span style={{ marginRight: 8 }}>Speed (mm/s):</span>
@@ -978,7 +978,7 @@ const ECGViewer = () => {
               <Option value={25}>25</Option>
               <Option value={50}>50</Option>
             </Select>
-        </div>
+          </div>
           <div>
             <span style={{ marginRight: 8 }}>Gain (mm/mV):</span>
             <Select value={mmPerMV} style={{ width: 120 }} onChange={setMmPerMV}>
@@ -986,7 +986,7 @@ const ECGViewer = () => {
               <Option value={10}>10</Option>
               <Option value={20}>20</Option>
             </Select>
-        </div>
+          </div>
           <div>
             <span style={{ marginRight: 8 }}>Display format:</span>
             <Select value={displayPreset} style={{ width: 160 }} onChange={setDisplayPreset}>
@@ -994,10 +994,10 @@ const ECGViewer = () => {
               <Option value="2x5">2 x 5s</Option>
               <Option value="4x2.5">4 x 2.5s</Option>
             </Select>
-      </div>
-      </div>
-      
-        {/* ECG参数显示 - 参照MedDream样式 */}
+          </div>
+        </div>
+
+        {/* ECG parameter display - reference MedDream style */}
         {selectedLead !== "multiple" && waveformData && (
           <div style={{
             background: '#f8f9fa',
@@ -1013,7 +1013,7 @@ const ECGViewer = () => {
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#6c757d' }}>Sampling Rate:</span>
                 <span style={{ fontWeight: 'bold', color: '#495057' }}>{samplingRate} Hz</span>
-      </div>
+              </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#6c757d' }}>Duration:</span>
                 <span style={{ fontWeight: 'bold', color: '#495057' }}>
@@ -1022,7 +1022,7 @@ const ECGViewer = () => {
                     'N/A'
                   }
                 </span>
-      </div>
+              </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#6c757d' }}>Samples:</span>
                 <span style={{ fontWeight: 'bold', color: '#495057' }}>
@@ -1030,14 +1030,14 @@ const ECGViewer = () => {
                     waveformData[parseInt(selectedLead)].length.toLocaleString() :
                     'N/A'
                   }
-        </span>
-      </div>
+                </span>
+              </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: '#6c757d' }}>Scale:</span>
                 <span style={{ fontWeight: 'bold', color: '#495057' }}>10mm/mV</span>
-      </div>
-      </div>
-      </div>
+              </div>
+            </div>
+          </div>
         )}
 
 
@@ -1094,70 +1094,70 @@ const ECGViewer = () => {
                     Update Diagnose
                   </Button>
                 )}
-                </div>
+              </div>
             }
             style={{ marginTop: '20px' }}
           >
             {dicomTags['x00104000'] ? (
-            <Row gutter={16}>
-              <Col span={12}>
-                <Card type="inner" title="1D Model Results">
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr>
-                        <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Type</th>
-                        <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Probability</th>
-                      </tr>
-                    </thead>
-                    <tbody>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Card type="inner" title="1D Model Results">
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr>
+                          <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Type</th>
+                          <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Probability</th>
+                        </tr>
+                      </thead>
+                      <tbody>
                         {(dicomTags['x00104000']?.split(' | ')[0] || "")
                           .split('; ')
                           .filter(Boolean)
                           .map(item => {
-                        const [type, prob] = item.split(':');
-                        return (
-                          <tr key={type}>
-                            <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>{type}</td>
-                            <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                            const [type, prob] = item.split(':');
+                            return (
+                              <tr key={type}>
+                                <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>{type}</td>
+                                <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
                                   {prob ? `${(parseFloat(prob) * 100).toFixed(1)}%` : 'N/A'}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </Card>
-              </Col>
-              <Col span={12}>
-                <Card type="inner" title="ResNet Top5 Results">
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr>
-                        <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Type</th>
-                        <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Probability</th>
-                      </tr>
-                    </thead>
-                    <tbody>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </Card>
+                </Col>
+                <Col span={12}>
+                  <Card type="inner" title="ResNet Top5 Results">
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr>
+                          <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Type</th>
+                          <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Probability</th>
+                        </tr>
+                      </thead>
+                      <tbody>
                         {(dicomTags['x00104000']?.split(' | ')[1] || "")
                           .replace('ResNet Top5: ', '')
                           .split('; ')
                           .filter(Boolean)
                           .map(item => {
-                        const [type, prob] = item.split(':');
-                        return (
-                          <tr key={type}>
-                            <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>{type}</td>
-                            <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                            const [type, prob] = item.split(':');
+                            return (
+                              <tr key={type}>
+                                <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>{type}</td>
+                                <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
                                   {prob ? `${(parseFloat(prob) * 100).toFixed(1)}%` : 'N/A'}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </Card>
-              </Col>
-            </Row>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </Card>
+                </Col>
+              </Row>
             ) : (
               <div style={{ textAlign: 'center', padding: '20px', color: '#666' }}>
                 No AI diagnosis available for this ECG file.
