@@ -53,7 +53,7 @@ const PatientDetail = () => {
   const [fileModalVisible, setFileModalVisible] = useState(false);
   const [aiDiagnosis, setAiDiagnosis] = useState({});
   const [diagnosisLoading, setDiagnosisLoading] = useState({});
-  
+
 
   const fetchPatient = async () => {
     try {
@@ -70,6 +70,8 @@ const PatientDetail = () => {
 
   const fetchEcgFiles = async () => {
     try {
+      // Ensure the list shows a loading spinner instead of "No data" while fetching
+      setLoading(true);
       if (!patient || !patient.id) return;
       const response = await patientsApi.getPatientEcgFiles(patient.id);
       setEcgFiles(response);
@@ -587,6 +589,7 @@ const PatientDetail = () => {
         <List
           className="ecg-file-list"
           loading={loading}
+          locale={{ emptyText: loading ? null : 'No data' }}
           dataSource={ecgFiles}
           renderItem={(file) => (
             <List.Item
@@ -711,7 +714,7 @@ const PatientDetail = () => {
                                 View ECG Waveform
                               </Button>
                             </Tooltip>,
-                            
+
                           ]}
                         >
                           <Tooltip title={instanceId}>
