@@ -960,7 +960,7 @@ const ECGViewer = () => {
       message.error('Select at least one disease');
       return;
     }
-    const DISEASE_CODE_MAP = { AF: 'AFIB', NR: 'NORM', NSR: 'NORM', ST: 'STACH', '1AVB': '1dAVB', '2AVB': '2dAVB', '3AVB': '3dAVB' };
+    const DISEASE_CODE_MAP = { AF: 'AFIB', NR: 'NORM', NSR: 'NORM', ST: 'STACH', SB: 'SB', SBRAD: 'SB', '1AVB': '1dAVB', '2AVB': '2dAVB', '3AVB': '3dAVB' };
     const normalized = Array.from(new Set(selectedDiseasesXAI.map(d => DISEASE_CODE_MAP[d] || d).filter(Boolean)));
     const params = new URLSearchParams();
     normalized.forEach(d => params.append('d', d));

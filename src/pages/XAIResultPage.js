@@ -56,6 +56,25 @@ const XAIResultPage = () => {
     ? location.state.selectedDiseases
     : queryDiseases;
 
+  // Map abnormality codes to detailed names for header display
+  const DISEASE_FULL_NAMES = {
+    AFIB: 'Atrial Fibrillation',
+    AFLT: 'Atrial Flutter',
+    STACH: 'Sinus Tachycardia',
+    SB: 'Sinus Bradycardia',
+    SBRAD: 'Sinus Bradycardia',
+    '1dAVB': 'First-degree AV Block',
+    '2dAVB': 'Second-degree AV Block',
+    '3dAVB': 'Third-degree AV Block',
+    LBBB: 'Left Bundle Branch Block',
+    RBBB: 'Right Bundle Branch Block',
+    PAC: 'Premature Atrial Complex',
+    PVC: 'Premature Ventricular Complex',
+    NORM: 'Normal Rhythm',
+    NR: 'Normal Rhythm',
+  };
+  const selectedDiseaseFullNames = (selectedDiseases || []).map((code) => DISEASE_FULL_NAMES[code] || code);
+
   // Support multi-instance via query: ?i=ID1&i=ID2; fallback to URL param instanceId
   const queryInstanceIds = (() => {
     try {
@@ -557,6 +576,12 @@ const XAIResultPage = () => {
             </Button>
           </Space>
         </div>
+        {selectedDiseaseFullNames && selectedDiseaseFullNames.length > 0 && (
+          <div style={{ marginTop: 8 }}>
+            <Text strong>Abnormalities selected: </Text>
+            <Text>{selectedDiseaseFullNames.join(', ')}</Text>
+          </div>
+        )}
         
         {/* Inline notes/tags section removed to avoid duplication */}
         
