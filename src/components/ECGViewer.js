@@ -7,7 +7,7 @@ import {
 import dicomParser from 'dicom-parser';
 import ReadECG from '../utils/ReadECG';
 import { Card, Space, Typography, Upload, Progress, Row, Col, Button, message, Select } from 'antd'; // ⭐ Modified: Import Select component
-import { InboxOutlined, FileImageOutlined, ArrowLeftOutlined } from '@ant-design/icons';
+import { InboxOutlined, FileImageOutlined, ArrowLeftOutlined, ExperimentOutlined } from '@ant-design/icons';
 import request from '../services/api/request';
 import { API_ENDPOINTS, API_BASE_URL } from '../services/api/config';
 
@@ -932,32 +932,7 @@ const ECGViewer = () => {
     }
   };
 
-  // Navigate to XAI interpretation page for a given disease code
-  const handleInterpretation = (diseaseCodeRaw) => {
-    if (!instanceId) {
-      message.error('Missing instance ID');
-      return;
-    }
-
-    // Normalize common aliases to backend-supported codes
-    const DISEASE_CODE_MAP = {
-      AF: 'AFIB',
-      NR: 'NORM',
-      NSR: 'NORM',
-      ST: 'STACH',
-      '1AVB': '1dAVB',
-      '2AVB': '2dAVB',
-      '3AVB': '3dAVB'
-    };
-
-    const disease = (DISEASE_CODE_MAP[diseaseCodeRaw] || diseaseCodeRaw || '').trim();
-    if (!disease) {
-      message.error('Invalid disease type');
-      return;
-    }
-
-    navigate(`/xai/${instanceId}`, { state: { selectedDiseases: [disease] } });
-  };
+  // Removed per-row interpretation handler; use multi-select Interpret button above instead
 
   // Build disease options from AI diagnosis tag (x00104000)
   const getAvailableDiseases = React.useMemo(() => {
@@ -1171,7 +1146,7 @@ const ECGViewer = () => {
                   onChange={setSelectedDiseasesXAI}
                   options={getAvailableDiseases.map(d => ({ label: d, value: d }))}
                 />
-                <Button type="primary" onClick={handleInterpretMultiple}>Interpret</Button>
+                <Button type="primary" icon={<ExperimentOutlined />} onClick={handleInterpretMultiple}>Interpret</Button>
               </div>
             )}
             {dicomTags['x00104000'] ? (
@@ -1183,7 +1158,7 @@ const ECGViewer = () => {
                         <tr>
                           <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Type</th>
                           <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Probability</th>
-                          <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Action</th>
+                          
                         </tr>
                       </thead>
                       <tbody>
@@ -1198,11 +1173,7 @@ const ECGViewer = () => {
                                 <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
                                   {prob ? `${(parseFloat(prob) * 100).toFixed(1)}%` : 'N/A'}
                                 </td>
-                                <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
-                                  <Button size="small" onClick={() => handleInterpretation(String(type))}>
-                                    AI Interpretation
-                                  </Button>
-                                </td>
+                                
                               </tr>
                             );
                           })}
@@ -1217,7 +1188,7 @@ const ECGViewer = () => {
                         <tr>
                           <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Type</th>
                           <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Probability</th>
-                          <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Action</th>
+                          
                         </tr>
                       </thead>
                       <tbody>
@@ -1233,11 +1204,7 @@ const ECGViewer = () => {
                                 <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
                                   {prob ? `${(parseFloat(prob) * 100).toFixed(1)}%` : 'N/A'}
                                 </td>
-                                <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
-                                  <Button size="small" onClick={() => handleInterpretation(String(type))}>
-                                    AI Interpretation
-                                  </Button>
-                                </td>
+                                
                               </tr>
                             );
                           })}

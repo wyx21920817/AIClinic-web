@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { Card, Typography, Button, Spin, Alert, Row, Col, Divider, Tag, Space, Progress, Tabs, Image, Form, Input, Checkbox, Modal, message } from 'antd';
+import { Card, Typography, Button, Spin, Alert, Row, Col, Divider, Tag, Space, Progress, Tabs, Image, Form, Input, Checkbox, Modal, List, Select, message } from 'antd';
 import { ArrowLeftOutlined, EditOutlined, DownloadOutlined } from '@ant-design/icons';
 import { aiDiagnosisAPI, ecgAPI, feedbackAPI } from '../services/api/ecg';
 import { API_BASE_URL } from '../services/api/config';
@@ -41,6 +41,7 @@ const XAIResultPage = () => {
     approved_status: false
   });
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [feedbackList, setFeedbackList] = useState([]);
   
   // Get the selected diseases from navigation state or URL query (?d=AFIB&d=LBBB)
   const queryDiseases = (() => {
@@ -69,6 +70,12 @@ const XAIResultPage = () => {
     : (instanceId ? [instanceId] : []);
   const isMultiInstance = instanceIds.length > 1;
   const currentInstanceId = isMultiInstance ? activeInstanceKey || instanceIds[0] : instanceId;
+  // Removed global approved badge in feedback section to avoid duplicate status
+
+  const normalizeFeedbackList = (list) => {
+    const arr = Array.isArray(list) ? list.slice() : [];
+    return arr.sort((a, b) => new Date(a.timestamp || a.created_at || 0) - new Date(b.timestamp || b.created_at || 0));
+  };
 
   useEffect(() => {
     const fetchInterpretations = async () => {
@@ -91,6 +98,12 @@ const XAIResultPage = () => {
           const map = {};
           results.forEach(([id, res]) => { map[id] = res; });
           setInterpretationsByInstance(map);
+          // Load feedback for the first instance
+          const active = instanceIds[0];
+          try {
+            const fb = await feedbackAPI.getFeedbackHistory(active);
+            setFeedbackList(normalizeFeedbackList(fb));
+          } catch (_) {}
         } else if (instanceIds[0]) {
           const result = await aiDiagnosisAPI.getXAIInterpretation(instanceIds[0], selectedDiseases);
           setInterpretationData(result);
@@ -104,6 +117,11 @@ const XAIResultPage = () => {
             const approved = result.ecg_file.approved_status || false;
             setEcgInfo({ notes, tags, approved_status: approved });
             form.setFieldsValue({ notes, tags, approved_status: approved });
+            // Load feedback for the single instance
+            try {
+              const fb = await feedbackAPI.getFeedbackHistory(instanceIds[0]);
+              setFeedbackList(normalizeFeedbackList(fb));
+            } catch (_) {}
           }
         }
       } catch (err) {
@@ -116,6 +134,18 @@ const XAIResultPage = () => {
 
     fetchInterpretations();
   }, [JSON.stringify(instanceIds), JSON.stringify(selectedDiseases), form]);
+
+  // Refresh feedback when switching active instance tab
+  useEffect(() => {
+    const loadFeedbackForActive = async () => {
+      if (!isMultiInstance || !activeInstanceKey) return;
+      try {
+        const fb = await feedbackAPI.getFeedbackHistory(activeInstanceKey);
+        setFeedbackList(normalizeFeedbackList(fb));
+      } catch (_) {}
+    };
+    loadFeedbackForActive();
+  }, [isMultiInstance, activeInstanceKey]);
 
   const handleBack = () => {
     navigate(-1); // Go back to previous page
@@ -248,6 +278,14 @@ const XAIResultPage = () => {
       if (!isMultiInstance) {
         setEcgInfo({ ...ecgInfo, approved_status: true });
         form.setFieldsValue({ ...form.getFieldsValue(), approved_status: true });
+      } else {
+        setInterpretationsByInstance(prev => ({
+          ...prev,
+          [id]: {
+            ...prev[id],
+            ecg_file: { ...(prev[id]?.ecg_file || {}), approved_status: true }
+          }
+        }));
       }
       message.success('ECG approved successfully');
     } catch (err) {
@@ -266,11 +304,36 @@ const XAIResultPage = () => {
       await feedbackAPI.submitFeedback({
         instance_id: id,
         feedback: values.feedback,
-        tags: values.tags || ''
+        tags: values.tags || '',
+        status: values.status
       });
       message.success('Feedback submitted');
       setFeedbackOpen(false);
+      // Append to bottom of list
+      setFeedbackList(prev => [...prev, {
+        id: `local-${Date.now()}`,
+        instance_id: id,
+        details: values.feedback,
+        tags: values.tags || '',
+        status: values.status,
+        timestamp: new Date().toISOString()
+      }]);
     } catch (err) {
+      // Graceful fallback if backend route not available (404)
+      if (err?.response?.status === 404) {
+        const id = currentInstanceId;
+        setFeedbackList(prev => [...prev, {
+          id: `local-${Date.now()}`,
+          instance_id: id,
+          details: values.feedback,
+          tags: values.tags || '',
+          status: values.status,
+          timestamp: new Date().toISOString()
+        }]);
+        setFeedbackOpen(false);
+        message.warning('Server feedback API not found (404). Saved locally for now.');
+        return;
+      }
       console.error('Feedback error:', err);
       message.error(err.message || 'Failed to submit feedback');
     }
@@ -469,6 +532,12 @@ const XAIResultPage = () => {
 
   return (
     <div className="page-container" style={{ padding: '20px' }}>
+      <style>
+        {`
+          .xai-tab-label { cursor: pointer; padding: 4px 10px; border: 1px solid #e8e8e8; border-radius: 8px; background: #fff; }
+          .ant-tabs-tab:hover .xai-tab-label { background: #f0f5ff; box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
+        `}
+      </style>
       <Button 
         icon={<ArrowLeftOutlined />} 
         onClick={handleBack} 
@@ -482,7 +551,7 @@ const XAIResultPage = () => {
           <Title level={2}>ECG Interpretation Results</Title>
           <Space wrap>
             <Button onClick={() => setFeedbackOpen(true)}>Doctor Feedback</Button>
-            <Button onClick={handleApproveCurrent} type="primary" danger loading={approveLoading}>Approve ECG</Button>
+            <Button onClick={handleApproveCurrent} type="primary" loading={approveLoading} style={{ backgroundColor: '#52c41a', borderColor: '#52c41a' }}>Approve ECG</Button>
             <Button onClick={() => (isMultiInstance ? handleDownloadPDFFor(currentInstanceId) : handleDownloadPDF())} icon={<DownloadOutlined />} loading={pdfLoading}>
               Download PDF
             </Button>
@@ -497,23 +566,33 @@ const XAIResultPage = () => {
             activeKey={activeInstanceKey}
             onChange={setActiveInstanceKey}
             type="line"
+            tabBarGutter={8}
             items={instanceIds.map(id => ({
               key: id,
-              label: id.length > 14 ? `${id.slice(0, 6)}…${id.slice(-6)}` : id,
+              label: (
+                <span className="xai-tab-label">
+                  {id.length > 14 ? `${id.slice(0, 6)}…${id.slice(-6)}` : id}
+                </span>
+              ),
               children: renderInstancePanel(id, interpretationsByInstance[id])
             }))}
           />
         ) : (
           interpretationData && interpretationData.results && interpretationData.results.length > 0 ? (
-            <Tabs 
+            <>
+              {interpretationData.results.length > 1 && (
+                <Alert style={{ marginBottom: 8 }} type="info" message="Tip: Click an abnormality tab to view its interpretation." showIcon />
+              )}
+              <Tabs 
               activeKey={activeTab} 
               onChange={setActiveTab}
               type="card"
               style={{ marginTop: '16px' }}
+              tabBarGutter={8}
               items={interpretationData.results.map((result, index) => ({
                 key: index.toString(),
                 label: (
-                  <span>
+                  <span className="xai-tab-label">
                     {result.abnormality}
                     <Tag 
                       color={result.status === 'ok' ? 'green' : 'orange'} 
@@ -533,7 +612,8 @@ const XAIResultPage = () => {
                 ),
                 children: renderDiseaseTab(result, index)
               }))}
-            />
+              />
+            </>
           ) : (
             <Alert 
               message="No interpretation results available" 
@@ -544,6 +624,47 @@ const XAIResultPage = () => {
         )}
       </Card>
 
+      {/* Feedback history at bottom */}
+      <Card title="Doctor Feedback" style={{ marginTop: 16 }}>
+        {/* Global approved badge removed; status shown per feedback item below */}
+        {/* Latest feedback preview removed to avoid duplicate notes display */}
+        {feedbackList && feedbackList.length > 0 ? (
+          <List
+            dataSource={feedbackList}
+            renderItem={(item) => (
+              <List.Item style={{ padding: 0, border: 'none' }}>
+                <Card size="small" style={{ width: '100%' }} bodyStyle={{ padding: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <Space size={8} wrap>
+                      <Text strong>Status:</Text>
+                      {item.status && (
+                        <Tag color={item.status === 'approve' ? 'green' : 'gold'}>
+                          {item.status === 'approve' ? 'Approve ECG' : 'Correct ECG'}
+                        </Tag>
+                      )}
+                    </Space>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      {new Date(item.timestamp || item.created_at || Date.now()).toLocaleString()}
+                    </Text>
+                  </div>
+                  <div style={{ whiteSpace: 'pre-line' }}>
+                    <Text strong>Notes: </Text>
+                    <Text>{item.details || item.feedback || ''}</Text>
+                  </div>
+                  {(item.tags && String(item.tags).trim() !== '') && (
+                    <div style={{ marginTop: 8 }}>
+                      <Tag>{item.tags}</Tag>
+                    </div>
+                  )}
+                </Card>
+              </List.Item>
+            )}
+          />
+        ) : (
+          <Text type="secondary">No feedback yet.</Text>
+        )}
+      </Card>
+
       {/* Doctor Feedback Modal */}
       <Modal
         title="Doctor Feedback"
@@ -551,7 +672,15 @@ const XAIResultPage = () => {
         onCancel={() => setFeedbackOpen(false)}
         footer={null}
       >
-        <Form layout="vertical" onFinish={handleSubmitFeedback}>
+        <Form layout="vertical" onFinish={handleSubmitFeedback} initialValues={{ status: 'approve' }}>
+          <Form.Item name="status" label="Status" rules={[{ required: true, message: 'Please choose status' }]}>
+            <Select
+              options={[
+                { label: 'Approve ECG', value: 'approve' },
+                { label: 'Correct ECG', value: 'correct' }
+              ]}
+            />
+          </Form.Item>
           <Form.Item name="feedback" label="Feedback" rules={[{ required: true, message: 'Please enter feedback' }]}>
             <Input.TextArea rows={4} placeholder="Your clinical feedback" />
           </Form.Item>
