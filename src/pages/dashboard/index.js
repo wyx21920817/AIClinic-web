@@ -213,8 +213,12 @@ const Dashboard = () => {
     {
       title: 'Actions',
       key: 'actions',
-      render: () => (
-        <Button type="link" size="small">
+      render: (_, record) => (
+        <Button 
+          type="link" 
+          size="small"
+          onClick={() => navigate(`/patients/${record.patient_id}`)}
+        >
           View Details
         </Button>
       )
@@ -252,8 +256,12 @@ const Dashboard = () => {
     {
       title: 'Actions',
       key: 'actions',
-      render: () => (
-        <Button type="link" size="small">
+      render: (_, record) => (
+        <Button 
+          type="link" 
+          size="small"
+          onClick={() => navigate(`/doctors/${record.id}`)}
+        >
           Manage
         </Button>
       )
