@@ -319,13 +319,55 @@ const PatientDetail = () => {
 
   // confirmXaiSelector removed along with selection UI
 
+  // Extract disease information from filename
+  const extractDiseaseFromFilename = (filename) => {
+    // Remove .dcm extension
+    const nameWithoutExt = filename.replace(/\.dcm$/i, '');
+
+    // Split by underscore and get the last part (disease code)
+    const parts = nameWithoutExt.split('_');
+    if (parts.length > 1) {
+      return parts[parts.length - 1];
+    }
+
+    // If no underscore found, return 'ECG' as default
+    return 'ECG';
+  };
+
+  // Rename DCM file with patient name and disease, ensure proper extension and MIME type
+  const renameDcmFile = (file, patientName) => {
+    const disease = extractDiseaseFromFilename(file.name);
+
+    // Clean patient name: remove special characters, replace spaces with underscores
+    const cleanPatientName = String(patientName || 'patient')
+      .replace(/[^a-zA-Z0-9\s]/g, '')
+      .replace(/\s+/g, '_')
+      .toLowerCase();
+
+    // Ensure `.dcm` extension
+    let newName = `${cleanPatientName}_${disease}`;
+    if (!/\.dcm$/i.test(newName)) newName += '.dcm';
+
+    // Always send with DICOM MIME type so backend can recognize it
+    return new File([file], newName, {
+      type: 'application/dicom',
+      lastModified: file.lastModified || Date.now()
+    });
+  };
+
   const handleUpload = async (file) => {
     try {
       if (!patient || !patient.id) {
         message.error('Patient ID not found');
         return false;
       }
-      await patientsApi.uploadEcgFile(patient.id, file);
+
+      // Rename the file before uploading
+      const renamedFile = renameDcmFile(file, patient.name);
+
+      console.log(`Uploading file as: ${renamedFile.name}`);
+
+      await patientsApi.uploadEcgFile(patient.id, renamedFile);
       message.success('ECG file uploaded successfully');
       fetchEcgFiles();
       return false; // Prevent default upload behavior
