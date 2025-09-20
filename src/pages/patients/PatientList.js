@@ -61,6 +61,8 @@ const PatientList = () => {
   const navigate = useNavigate();
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [selectedPatient, setSelectedPatient] = useState(null);
+  const [uploadModalVisible, setUploadModalVisible] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [pagination, setPagination] = useState({
     current: 1,

@@ -923,7 +923,7 @@ const PatientDetail = () => {
                                             const probability = parseFloat(match[2]);
                                             
                                             // Only include non-zero probabilities
-                                            if (probability > 0) {
+                                            if (probability > 0.01) {
                                               pairs.push({ disease, probability });
                                             }
                                           }
@@ -931,57 +931,50 @@ const PatientDetail = () => {
                                           // Sort by probability in descending order
                                           pairs.sort((a, b) => b.probability - a.probability);
                                           
-                                          if (pairs.length > 0) {
+                                          if (pairs.length > 0.01) {
                                             predictions.push({ title, pairs });
                                           }
                                         });
-                                        
-                                    
-                                        
                                         return (
                                           <div>
-                                            {predictions.map((prediction, idx) => (
-                                              <div key={idx} style={{ marginBottom: idx < predictions.length - 1 ? '16px' : 0 }}>
-                                                <div style={{ fontWeight: 'bold', marginBottom: '8px', color: '#1890ff' }}>
-                                                  {prediction.title}
-                                                </div>
-                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                                                  {prediction.pairs.map((pair, pairIdx) => {
-                                                    // Calculate percentage and determine color
-                                                    const percentage = Math.round(pair.probability * 100);
-                                                    let color = '#52c41a'; // green for low values
-                                                    if (percentage > 20) color = '#faad14'; // yellow for medium
-                                                    if (percentage > 50) color = '#f5222d'; // red for high
-                                                    
-                                                    return (
-                                                      <div key={pairIdx} style={{ 
-                                                        backgroundColor: '#f9f9f9',
-                                                        border: `1px solid ${color}`,
-                                                        borderRadius: '4px',
-                                                        padding: '8px 12px',
-                                                        minWidth: '180px'
-                                                      }}>
-                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                                                          <span style={{ fontWeight: 'bold' }}>{pair.disease}</span>
-                                                          <span style={{ color, fontWeight: 'bold' }}>{percentage}%</span>
-                                                        </div>
-                                                        {(
-                                                          <div style={{ fontSize: '12px', color: '#666' }}>
-                                                            {pair.disease}
+                                            <div style={{ display: 'flex', flexDirection: 'row', gap: '16px' }}>
+                                              {predictions.map((prediction, idx) => (
+                                                <div key={idx} style={{ flex: '0 0 auto', minWidth: '200px', maxWidth: '300px' }}>
+                                                  <div style={{ fontWeight: 'bold', marginBottom: '8px', color: '#1890ff' }}>
+                                                    {prediction.title}
+                                                  </div>
+                                                  <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'nowrap', gap: '4px' }}>
+                                                    {prediction.pairs.map((pair, pairIdx) => {
+                                                      // Calculate percentage and determine color
+                                                      const percentage = Math.round(pair.probability * 100);
+                                                      let color = '#52c41a'; // green for low values
+                                                      if (percentage > 20) color = '#faad14'; // yellow for medium
+                                                      if (percentage > 50) color = '#f5222d'; // red for high
+                                                      
+                                                      return (
+                                                        <div key={pairIdx} style={{ 
+                                                          backgroundColor: '#f9f9f9',
+                                                          border: `1px solid ${color}`,
+                                                          borderRadius: '3px',
+                                                          padding: '4px 6px'
+                                                        }}>
+                                                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1px' }}>
+                                                            <span style={{ fontWeight: 'bold', fontSize: '11px' }}>{pair.disease}</span>
+                                                            <span style={{ color, fontWeight: 'bold', fontSize: '11px' }}>{percentage}%</span>
                                                           </div>
-                                                        )}
-                                                        <Progress 
-                                                          percent={percentage}
-                                                          size="small"
-                                                          showInfo={false}
-                                                          strokeColor={color}
-                                                        />
-                                                      </div>
-                                                    );
-                                                  })}
+                                                          <Progress 
+                                                            percent={percentage}
+                                                            size="small"
+                                                            showInfo={false}
+                                                            strokeColor={color}
+                                                          />
+                                                        </div>
+                                                      );
+                                                    })}
+                                                  </div>
                                                 </div>
-                                              </div>
-                                            ))}
+                                              ))}
+                                            </div>
                                             
                                             {/* Show raw data in small text at bottom */}
                                             <div style={{ 
