@@ -53,6 +53,34 @@ const PatientDetail = () => {
   const [fileModalVisible, setFileModalVisible] = useState(false);
   const [aiDiagnosis, setAiDiagnosis] = useState({});
   const [diagnosisLoading, setDiagnosisLoading] = useState({});
+  const [renamedFiles, setRenamedFiles] = useState(new Map()); // Store renamed filenames
+
+  // Persist/restore mapping to survive page refresh
+  const STORAGE_KEY = 'ecgRenamedFiles';
+  const loadRenamedMapFromStorage = () => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return new Map();
+      const obj = JSON.parse(raw);
+      return new Map(Object.entries(obj));
+    } catch (_) {
+      return new Map();
+    }
+  };
+
+  const saveRenamedMapToStorage = (map) => {
+    try {
+      const obj = Object.fromEntries(map.entries());
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
+    } catch (_) { }
+  };
+
+  useEffect(() => {
+    const initial = loadRenamedMapFromStorage();
+    if (initial.size > 0) {
+      setRenamedFiles(initial);
+    }
+  }, []);
 
 
   const fetchPatient = async () => {
@@ -74,7 +102,43 @@ const PatientDetail = () => {
       setLoading(true);
       if (!patient || !patient.id) return;
       const response = await patientsApi.getPatientEcgFiles(patient.id);
-      setEcgFiles(response);
+      // compute stable display names for each file and store on the objects
+      const withDisplayNames = Array.isArray(response)
+        ? response.map(f => ({ ...f, display_filename: computeDisplayFilename(f, patient?.name) }))
+        : response;
+      setEcgFiles(withDisplayNames);
+
+      // Only generate renamed filenames for files that don't already have mappings
+      if (response && Array.isArray(response)) {
+        const newRenamedFiles = new Map();
+        response.forEach(file => {
+          const fileId = file.file_id || file.id || file.uuid || file.fileId;
+          if (fileId && file.filename) {
+            // Check if we already have a mapping for this file
+            const existingMapping = renamedFiles.get(fileId);
+            if (!existingMapping) {
+              // Only generate if no existing mapping
+              const disease = extractDiseaseFromFilename(file.filename);
+              const cleanPatientName = String(patient.name || 'patient')
+                .replace(/[^a-zA-Z0-9\s]/g, '')
+                .replace(/\s+/g, '_')
+                .toLowerCase();
+              let newName = `${cleanPatientName}_${disease}`;
+              if (!/\.dcm$/i.test(newName)) newName += '.dcm';
+              newRenamedFiles.set(fileId, newName);
+            }
+          }
+        });
+        // Only add new mappings, don't override existing ones
+        if (newRenamedFiles.size > 0) {
+          setRenamedFiles(prev => {
+            const next = new Map([...prev, ...newRenamedFiles]);
+            saveRenamedMapToStorage(next);
+            return next;
+          });
+          console.log('Generated renamed filenames for files without existing mappings:', newRenamedFiles);
+        }
+      }
     } catch (error) {
       message.error('Failed to fetch ECG files');
       console.error('Error:', error);
@@ -330,8 +394,82 @@ const PatientDetail = () => {
       return parts[parts.length - 1];
     }
 
-    // If no underscore found, return 'ECG' as default
+    // If no underscore found, try to extract meaningful info from filename
+    if (nameWithoutExt.toLowerCase().includes('aflt')) {
+      return 'AFLT';
+    } else if (nameWithoutExt.toLowerCase().includes('afib')) {
+      return 'AFIB';
+    } else if (nameWithoutExt.toLowerCase().includes('normal')) {
+      return 'NORMAL';
+    } else if (nameWithoutExt.toLowerCase().includes('lbbb')) {
+      return 'LBBB';
+    } else if (nameWithoutExt.toLowerCase().includes('rbbb')) {
+      return 'RBBB';
+    }
+
+    // If no specific pattern found, return 'ECG' as default
     return 'ECG';
+  };
+
+  // Try to read original_filename from file.content (may be JSON or JSON-like string)
+  const extractOriginalFilenameFromContent = (rawContent) => {
+    if (!rawContent) return null;
+    const text = String(rawContent).trim();
+    const tryParsers = [
+      // direct JSON
+      (t) => {
+        try { return JSON.parse(t); } catch (_) { return null; }
+      },
+      // single-quotes / unquoted keys normalization
+      (t) => {
+        try {
+          const normalized = t
+            .replace(/\n/g, ' ')
+            .replace(/'/g, '"')
+            .replace(/([,{\s])([A-Za-z0-9_]+)\s*:/g, '$1"$2":');
+          return JSON.parse(normalized);
+        } catch (_) { return null; }
+      }
+    ];
+    for (const p of tryParsers) {
+      const obj = p(text);
+      if (obj && typeof obj === 'object') {
+        if (obj.original_filename) return String(obj.original_filename);
+        if (obj.filename) return String(obj.filename);
+      }
+    }
+    // Last resort: regex extraction original_filename: 'xxx.dcm'
+    const m = text.match(/original_filename\s*[:=]\s*['\"]([^'\"]+\.dcm)['\"]/i);
+    return m ? m[1] : null;
+  };
+
+  // Compute a stable display name for a file
+  const computeDisplayFilename = (file, patientName) => {
+    const fileId = file?.file_id || file?.id || file?.uuid || file?.fileId;
+    // 1) original name inside content, if present
+    const fromContent = extractOriginalFilenameFromContent(file?.content);
+    if (fromContent) return fromContent;
+    // 2) name stored in our mapping (e.g., from immediate upload flow)
+    const fromMap = fileId ? renamedFiles.get(fileId) : null;
+    if (fromMap) return fromMap;
+    // 3) derive from current filename
+    if (file?.filename) {
+      const disease = extractDiseaseFromFilename(file.filename);
+      const cleanPatientName = String(patientName || 'patient')
+        .replace(/[^a-zA-Z0-9\s]/g, '')
+        .replace(/\s+/g, '_')
+        .toLowerCase();
+      let newName = `${cleanPatientName}_${disease}`;
+      if (!/\.dcm$/i.test(newName)) newName += '.dcm';
+      return newName;
+    }
+    // 4) fallback
+    return 'ecg.dcm';
+  };
+
+  // Get display filename (renamed if available, otherwise original)
+  const getDisplayFilename = (file) => {
+    return file.display_filename || computeDisplayFilename(file, patient?.name);
   };
 
   // Rename DCM file with patient name and disease, ensure proper extension and MIME type
@@ -367,9 +505,68 @@ const PatientDetail = () => {
 
       console.log(`Uploading file as: ${renamedFile.name}`);
 
-      await patientsApi.uploadEcgFile(patient.id, renamedFile);
+      const response = await patientsApi.uploadEcgFile(patient.id, renamedFile);
+
+      console.log('Upload response:', response);
+
+      // Store the renamed filename mapping
+      // Try different possible field names for file ID
+      const fileId = response?.file_id || response?.id || response?.uuid || response?.fileId;
+      if (response && fileId) {
+        setRenamedFiles(prev => {
+          const next = new Map(prev).set(fileId, renamedFile.name);
+          saveRenamedMapToStorage(next);
+          return next;
+        });
+        console.log('Stored renamed file mapping:', fileId, renamedFile.name);
+      } else {
+        console.log('No file ID found in response, response structure:', Object.keys(response || {}));
+        console.log('Response content:', response);
+      }
+
+      // After upload, immediately fetch the latest files and map the newest item to our renamed name
+      try {
+        const latestListRaw = await patientsApi.getPatientEcgFiles(patient.id);
+        let latestList = Array.isArray(latestListRaw)
+          ? latestListRaw.map(f => ({ ...f }))
+          : latestListRaw;
+        if (Array.isArray(latestList) && latestList.length > 0) {
+          const uploadedCreatedAt = response?.created_at;
+          // pick the file with matching created_at, else the newest by created_at
+          let candidate = null;
+          if (uploadedCreatedAt) {
+            candidate = latestList.find(f => String(f.created_at) === String(uploadedCreatedAt));
+          }
+          if (!candidate) {
+            candidate = [...latestList].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+          }
+          const candidateId = candidate?.file_id || candidate?.id || candidate?.uuid || candidate?.fileId;
+          if (candidateId) {
+            // Update mapping first
+            setRenamedFiles(prev => {
+              const next = new Map(prev).set(candidateId, renamedFile.name);
+              saveRenamedMapToStorage(next);
+              return next;
+            });
+            console.log('Mapped newest fetched file to renamed name:', candidateId, renamedFile.name);
+            // Recompute display names with the new mapping applied
+            const listWithNames = latestList.map(f => {
+              const id = f.file_id || f.id || f.uuid || f.fileId;
+              const display = id === candidateId ? renamedFile.name : computeDisplayFilename(f, patient?.name);
+              return { ...f, display_filename: display };
+            });
+            setEcgFiles(listWithNames);
+          } else {
+            // No candidate, compute names normally
+            const listWithNames = latestList.map(f => ({ ...f, display_filename: computeDisplayFilename(f, patient?.name) }));
+            setEcgFiles(listWithNames);
+          }
+        }
+      } catch (e) {
+        console.log('Post-upload fetch mapping skipped due to error:', e);
+      }
+
       message.success('ECG file uploaded successfully');
-      fetchEcgFiles();
       return false; // Prevent default upload behavior
     } catch (error) {
       message.error('Failed to upload ECG file');
@@ -665,7 +862,7 @@ const PatientDetail = () => {
               ]}
             >
               <List.Item.Meta
-                title={file.filename}
+                title={getDisplayFilename(file)}
                 description={
                   <Space direction="vertical" style={{ width: '100%' }}>
                     <div>created at: {dayjs(file.created_at).tz(PERTH_TZ).format('YYYY-MM-DD HH:mm:ss')} ({PERTH_TZ})</div>
