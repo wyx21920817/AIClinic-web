@@ -1,15 +1,11 @@
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import {
-  DicomECGViewer,
-  SOP_CLASS_UIDS,
-} from 'ecg-dicom-web-viewer';
+import { DicomECGViewer } from 'ecg-dicom-web-viewer';
 import dicomParser from 'dicom-parser';
-import ReadECG from '../utils/ReadECG';
 import { Card, Space, Typography, Upload, Progress, Row, Col, Button, message, Select } from 'antd'; // ⭐ Modified: Import Select component
 import { InboxOutlined, FileImageOutlined, ArrowLeftOutlined, ExperimentOutlined } from '@ant-design/icons';
 import request from '../services/api/request';
-import { API_ENDPOINTS, API_BASE_URL } from '../services/api/config';
+import { API_ENDPOINTS } from '../services/api/config';
 
 const { Title } = Typography;
 const { Dragger } = Upload;
@@ -78,13 +74,9 @@ const SOP_CLASS_DESCRIPTIONS = {
 
 const ECGViewer = () => {
   const { userId, instanceId } = useParams();
-  console.log('ECGViewer mounted');
-  console.log('URL params:', { userId, instanceId });
   const navigate = useNavigate();
   const [error, setError] = React.useState(null);
-  const [isConverting, setIsConverting] = React.useState(false);
   const [conversionProgress, setConversionProgress] = React.useState(0);
-  const [currentTaskId, setCurrentTaskId] = React.useState(null);
   const [statusMessage, setStatusMessage] = React.useState('');
   const [showProgress, setShowProgress] = React.useState(false);
   const [convertedDicomUrl, setConvertedDicomUrl] = React.useState(null);
@@ -107,30 +99,47 @@ const ECGViewer = () => {
   const [mmPerMV, setMmPerMV] = React.useState(10);        // Gain: 5/10/20 mm/mV
   const [displayPreset, setDisplayPreset] = React.useState('1x10'); // 1x10 | 2x5 | 4x2.5
 
-  // Parse WaveformSequence (5400,0100) -> Waveform Data (5400,1010)
-  const parseWaveformData = React.useCallback((dataSet, byteArray) => {
-    console.log('=== DICOM Waveform Parsing Debug ===');
+
+  const parseWaveformData = React.useCallback((dataSet, byteArray, onSamplingRateChange) => {
 
     const waveformSeq = dataSet.elements['x54000100'];
     if (!waveformSeq || !waveformSeq.items) {
-      console.log('No waveform sequence found!');
       return [];
     }
 
     const transferSyntax = dataSet.string('x00020010') || '';
-    const isExplicitVR = transferSyntax.includes('1.2.840.10008.1.2.1'); // Explicit VR Little Endian
+    const isExplicitVR = transferSyntax.includes('1.2.840.10008.1.2.1');
 
-    // Read channel count (lead count), default to 12 if unavailable
-    const channelCount = dataSet.intString('x003a0001') || 12;
-    const samplingRate = dataSet.intString('x003a0005') || 500;
 
-    console.log('DICOM Parsing Info:', {
-      transferSyntax,
-      isExplicitVR,
-      channelCount,
-      samplingRate,
-      waveformItems: waveformSeq.items.length
-    });
+    let channelCount = 12;
+    let samplingRate = 500;
+    let samplesPerChannel = 0;
+
+
+    if (waveformSeq.items.length > 0) {
+      const firstItem = waveformSeq.items[0];
+      const itemData = byteArray.slice(firstItem.dataOffset, firstItem.dataOffset + firstItem.length);
+
+
+      let offset = 0;
+      while (offset + 8 <= itemData.length) {
+        const group = itemData[offset] + (itemData[offset + 1] << 8);
+        const element = itemData[offset + 2] + (itemData[offset + 3] << 8);
+
+        if (group === 0x003A && element === 0x0200) {
+          // ChannelDefinitionSequence
+          const seqLength = itemData[offset + 4] + (itemData[offset + 5] << 8) + (itemData[offset + 6] << 16) + (itemData[offset + 7] << 24);
+          break;
+        }
+        offset += 8;
+      }
+    }
+
+
+    channelCount = dataSet.intString('x003a0001') || 12;
+    samplingRate = dataSet.intString('x003a0005') || 500;
+    samplesPerChannel = dataSet.intString('x003a0010') || 0;
+
 
     const accumPerLead = Array.from({ length: channelCount }, () => []); // number[] per lead
 
@@ -184,13 +193,6 @@ const ECGViewer = () => {
             accumPerLead[0].push(...Array.from(flat));
           }
 
-          console.log(`[WF] Found waveform in item ${itemIndex}:`, {
-            samples: flat.length,
-            samplesPerLead: flat.length / channelCount,
-            duration: (flat.length / channelCount) / samplingRate,
-            channelCount,
-            samplingRate
-          });
           break; // This item completed
         }
 
@@ -219,7 +221,6 @@ const ECGViewer = () => {
           } else {
             accumPerLead[0].push(...Array.from(arr));
           }
-          console.log(`[WF] Fallback used for item ${itemIndex}, samples:`, arr.length);
         }
       }
     });
@@ -230,12 +231,6 @@ const ECGViewer = () => {
         allLeads.push(Int16Array.from(accumPerLead[c]));
       }
     }
-    console.log('[WF] Final Results:', {
-      totalLeads: allLeads.length,
-      firstLeadSamples: allLeads[0]?.length,
-      duration: allLeads[0] ? (allLeads[0].length / samplingRate).toFixed(2) + 's' : 'N/A',
-      samplingRate: samplingRate + 'Hz'
-    });
 
     // Add detailed information for each lead
     allLeads.forEach((lead, idx) => {
@@ -243,52 +238,59 @@ const ECGViewer = () => {
         const min = Math.min(...lead);
         const max = Math.max(...lead);
         const range = max - min;
-        console.log(`[WF] Lead ${idx}:`, {
-          samples: lead.length,
-          duration: (lead.length / samplingRate).toFixed(2) + 's',
-          min,
-          max,
-          range,
-          amplitude: range > 1000 ? 'Normal' : range > 100 ? 'Low' : 'Very Low'
-        });
       }
     });
+
+
+    if (allLeads.length > 0 && allLeads[0].length > 0) {
+      const actualSamples = allLeads[0].length;
+      const actualDuration = actualSamples / samplingRate;
+
+
+
+      if (actualSamples < 3000 && actualDuration < 10) {
+        const originalSamplingRate = samplingRate;
+        const newSamplingRate = 100;
+        const newDuration = actualSamples / newSamplingRate;
+
+
+
+        if (onSamplingRateChange) {
+          onSamplingRateChange(newSamplingRate);
+        }
+      }
+    }
 
     return allLeads;
   }, []);
 
   // Professional ECG single lead rendering - reference MedDream style
+
   const drawSingleLead = React.useCallback((canvasId, leadIndex, waveformDataToUse = null) => {
-    console.log('drawSingleLead called with canvasId:', canvasId, 'leadIndex:', leadIndex);
     const canvas = document.getElementById(canvasId);
     if (!canvas) {
-      console.log('Canvas not found:', canvasId);
       return;
     }
 
-    // Check canvas element type
     if (canvas.tagName !== 'CANVAS') {
-      console.error('Element is not a canvas:', canvas.tagName, canvas);
       return;
     }
 
-    // Use passed waveformData or waveformData from state
     const dataToUse = waveformDataToUse || waveformData;
     if (!dataToUse || !dataToUse[leadIndex]) {
-      console.log('Waveform data not ready for lead:', leadIndex, 'dataToUse:', dataToUse);
       return;
     }
 
-    console.log('Drawing single lead:', leadIndex, 'with', dataToUse[leadIndex].length, 'samples');
+    const samples = dataToUse[leadIndex];
 
     const ctx = canvas.getContext('2d');
     const rect = canvas.getBoundingClientRect();
 
-    // Reserve space for axis labels - more professional layout
-    const paddingLeft = 80;   // Left side voltage scale space
-    const paddingBottom = 50; // Bottom time scale space
-    const paddingTop = 40;    // Top lead label space
-    const paddingRight = 30;  // Right side space
+    // 🔥 Weasis标准布局参数
+    const paddingLeft = 80;
+    const paddingBottom = 50;
+    const paddingTop = 40;
+    const paddingRight = 30;
 
     const contentWidth = rect.width - paddingLeft - paddingRight;
     const contentHeight = rect.height - paddingTop - paddingBottom;
@@ -298,81 +300,127 @@ const ECGViewer = () => {
     ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
     ctx.clearRect(0, 0, rect.width, rect.height);
 
-    // ECG standard parameters - controlled by UI
-    const pixelsPerMM = 6;  // 1mm = 6px (fixed pixel density)
-    const pixelsPerSecond = mmPerSecond * pixelsPerMM;
-    const pixelsPerMV = mmPerMV * pixelsPerMM;
-    const smallGridSize = pixelsPerMM; // Small grid: 6px = 1mm
-    const largeGridSize = pixelsPerMM * 5; // Large grid: 30px = 5mm
 
-    // Debug info: verify scale
-    console.log('ECG Scale Verification:', {
-      mmPerSecond,
-      mmPerMV,
-      pixelsPerMM,
-      pixelsPerSecond,
-      pixelsPerMV,
-      smallGridSize,
-      largeGridSize,
-      contentWidth,
-      contentHeight
-    });
+    const pixelsPerMM = 5;  // 1mm = 5px (Weasis标准)
+    const pixelsPerSecond = mmPerSecond * pixelsPerMM; // 25mm/s * 5px/mm = 125px/s
+    const pixelsPerMV = mmPerMV * pixelsPerMM;         // 10mm/mV * 5px/mm = 50px/mV
 
-    // Background color - similar to MedDream light background
+
+    const smallGridTime = 0.04;
+    const largeGridTime = 0.2;
+    const smallGridVoltage = 0.1;
+    const largeGridVoltage = 0.5;
+
+    const smallGridSizeX = smallGridTime * pixelsPerSecond; // 0.04s * 125px/s = 5px
+    const largeGridSizeX = largeGridTime * pixelsPerSecond; // 0.2s * 125px/s = 25px
+    const smallGridSizeY = smallGridVoltage * pixelsPerMV;  // 0.1mV * 50px/mV = 5px
+    const largeGridSizeY = largeGridVoltage * pixelsPerMV;  // 0.5mV * 50px/mV = 25px
+
+
     ctx.fillStyle = '#fefefe';
     ctx.fillRect(0, 0, rect.width, rect.height);
 
-    // Calculate actual time range of ECG data
-    const samples = dataToUse[leadIndex];
+
     const actualDuration = samples.length / samplingRate;
-    // Limit time window based on display format
-    const presetSeconds = displayPreset === '1x10' ? 10 : displayPreset === '2x5' ? 5 : 2.5;
-    const maxDisplayTime = Math.min(actualDuration, presetSeconds);
-    const maxDisplayX = paddingLeft + maxDisplayTime * pixelsPerSecond;
+    let targetDuration = 10;
+    let displayDuration = targetDuration;
 
-    // Calculate actual display range of voltage axis (±1.5mV)
+
+    if (actualDuration < 10) {
+      displayDuration = actualDuration;
+    } else if (actualDuration > 10) {
+      displayDuration = 10;
+    }
+
+    const maxDisplayX = paddingLeft + displayDuration * pixelsPerSecond;
+
+
+    const requiredWidth = maxDisplayX + paddingRight;
+    const actualWidth = rect.width;
+
+
+
     const centerY = paddingTop + contentHeight / 2;
-    const voltageRange = 1.5; // ±1.5mV
-    const minDisplayY = centerY - (voltageRange * pixelsPerMV); // Upper boundary
-    const maxDisplayY = centerY + (voltageRange * pixelsPerMV); // Lower boundary
 
-    // Draw ECG grid - only in data area
-    ctx.strokeStyle = '#ff6b6b'; // More vibrant red small grid
-    ctx.lineWidth = 0.3;
+    // 计算实际数据的电压范围
+    const actualMinVoltage = Math.min(...samples) / 1000; // 转换为mV
+    const actualMaxVoltage = Math.max(...samples) / 1000; // 转换为mV
 
-    // Small grid (1mm) - only draw within 1.5mV range
-    for (let x = paddingLeft; x <= maxDisplayX; x += smallGridSize) {
-      ctx.beginPath();
-      ctx.moveTo(x, minDisplayY);
-      ctx.lineTo(x, maxDisplayY);
-      ctx.stroke();
-    }
-    for (let y = minDisplayY; y <= maxDisplayY; y += smallGridSize) {
-      ctx.beginPath();
-      ctx.moveTo(paddingLeft, y);
-      ctx.lineTo(maxDisplayX, y);
-      ctx.stroke();
-    }
+    // 智能调整电压范围：根据实际数据的最小值和最大值分别调整
+    let minVoltage, maxVoltage;
 
-    // Large grid (5mm) - more prominent red, only draw within 1.5mV range
+    // 调整最小值范围：向下取整到0.5mV的倍数，但至少-1.5mV
+    minVoltage = Math.min(-1.5, Math.floor(actualMinVoltage / 0.5) * 0.5);
+
+    // 调整最大值范围：向上取整到0.5mV的倍数，但至少+1.5mV
+    maxVoltage = Math.max(1.5, Math.ceil(actualMaxVoltage / 0.5) * 0.5);
+
+    // 计算电压范围（用于网格绘制）
+    const voltageRange = Math.max(Math.abs(minVoltage), maxVoltage);
+
+    const gridPaddingFactor = 0.8;
+    const extendedPixelsPerMV = pixelsPerMV * (1 + gridPaddingFactor);
+
+    // 使用实际的minVoltage和maxVoltage计算显示范围，避免多余空白
+    const minDisplayY = centerY - (maxVoltage * extendedPixelsPerMV);
+    const maxDisplayY = centerY - (minVoltage * extendedPixelsPerMV);
+
+
+
     ctx.strokeStyle = '#ff6b6b';
-    ctx.lineWidth = 0.8;
-    for (let x = paddingLeft; x <= maxDisplayX; x += largeGridSize) {
+    ctx.lineWidth = 0.5;
+    ctx.globalAlpha = 0.7;
+
+    // 时间轴小网格 (0.04秒)
+    for (let x = paddingLeft; x <= maxDisplayX; x += smallGridSizeX) {
       ctx.beginPath();
       ctx.moveTo(x, minDisplayY);
       ctx.lineTo(x, maxDisplayY);
       ctx.stroke();
     }
-    for (let y = minDisplayY; y <= maxDisplayY; y += largeGridSize) {
+
+
+    const extendedSmallGridSizeY = smallGridVoltage * extendedPixelsPerMV;
+    // 只绘制实际数据范围内的网格
+    for (let voltage = minVoltage; voltage <= maxVoltage; voltage += smallGridVoltage) {
+      const y = centerY - (voltage * extendedPixelsPerMV);
+      if (y >= minDisplayY && y <= maxDisplayY) {
+        ctx.beginPath();
+        ctx.moveTo(paddingLeft, y);
+        ctx.lineTo(maxDisplayX, y);
+        ctx.stroke();
+      }
+    }
+
+
+    ctx.strokeStyle = '#ff6b6b';
+    ctx.lineWidth = 1.2;
+    ctx.globalAlpha = 1.0;
+
+
+    for (let x = paddingLeft; x <= maxDisplayX; x += largeGridSizeX) {
       ctx.beginPath();
-      ctx.moveTo(paddingLeft, y);
-      ctx.lineTo(maxDisplayX, y);
+      ctx.moveTo(x, minDisplayY);
+      ctx.lineTo(x, maxDisplayY);
       ctx.stroke();
     }
 
-    // Draw ECG waveform
 
-    // Waveform color - more professional style
+    // 只绘制实际数据范围内的大网格
+    for (let voltage = minVoltage; voltage <= maxVoltage; voltage += largeGridVoltage) {
+      const y = centerY - (voltage * extendedPixelsPerMV);
+      if (y >= minDisplayY && y <= maxDisplayY) {
+        ctx.beginPath();
+        ctx.moveTo(paddingLeft, y);
+        ctx.lineTo(maxDisplayX, y);
+        ctx.stroke();
+      }
+    }
+
+
+    ctx.globalAlpha = 1.0;
+
+
     ctx.beginPath();
     ctx.strokeStyle = '#1a365d';
     ctx.lineWidth = 1.5;
@@ -380,14 +428,18 @@ const ECGViewer = () => {
     ctx.lineJoin = 'round';
 
     let hasMoved = false;
+
     for (let i = 0; i < samples.length; i++) {
+
       const t = i / samplingRate;
       const x = paddingLeft + t * pixelsPerSecond;
-      if (x > rect.width - paddingRight) break;
 
-      // Convert voltage value to pixel position (note ECG Y-axis is inverted)
-      const voltageMV = samples[i] / 1000; // Convert to mV
-      const y = centerY - (voltageMV * pixelsPerMV);
+
+      if (x > maxDisplayX) break;
+
+
+      const voltageMV = samples[i] / 1000; // 转换为mV
+      const y = centerY - (voltageMV * extendedPixelsPerMV);
 
       if (!hasMoved) {
         ctx.moveTo(x, y);
@@ -397,6 +449,7 @@ const ECGViewer = () => {
       }
     }
     ctx.stroke();
+
 
     // Add baseline reference line - finer dashed line, only in data area
     ctx.strokeStyle = '#ff6b6b';
@@ -415,98 +468,66 @@ const ECGViewer = () => {
     ctx.textAlign = 'left';
     ctx.fillText(leadName, paddingLeft, paddingTop - 8);
 
-    // Add time scale - more precise markings
+
     ctx.fillStyle = '#4a5568';
     ctx.font = '11px Arial, sans-serif';
     ctx.textAlign = 'center';
 
-    // Draw time markers below grid
-    const timeScaleY = rect.height - 15;
 
-    // Calculate display time range based on actual ECG data length
-    const maxTime = Math.min(actualDuration, 10); // Use actual ECG data length, limit max display to 10 seconds
+    const timeScaleY = rect.height - paddingBottom + 5; // 贴着横轴边
 
-    // Smart time annotation - adjust density based on duration
+
+    const timeInterval = 0.2;
+    const maxTime = displayDuration;
+
+
+
+    // 绘制横轴时间标签 - 直接在横轴位置标记
     ctx.strokeStyle = '#4a5568';
     ctx.lineWidth = 1;
-
-    // Simplified time annotation - directly use 0.2 second intervals
-    let timeInterval = 0.2; // Fixed 0.2 second interval
-    let labelPrecision = 1; // Display 0.1 second precision
-
-    console.log('=== ECG Time Annotation Settings ===');
-    console.log('Max Time:', maxTime.toFixed(2), 'seconds');
-    console.log('Time Interval:', timeInterval, 'seconds');
-    console.log('Label Precision:', labelPrecision, 'decimal places');
-    console.log('Total Labels:', Math.ceil(maxTime / timeInterval));
-    console.log('=====================================');
+    ctx.fillStyle = '#4a5568';
+    ctx.font = '11px Arial, sans-serif';
+    ctx.textAlign = 'center';
 
     for (let t = 0; t <= maxTime; t += timeInterval) {
       const x = paddingLeft + t * pixelsPerSecond;
 
-      // Only draw markings within data range
       if (x >= paddingLeft && x <= maxDisplayX) {
-        // Draw time marker line
-        ctx.beginPath();
-        ctx.moveTo(x, rect.height - paddingBottom + 5);
-        ctx.lineTo(x, rect.height - paddingBottom + 30);
-        ctx.stroke();
-
-        // Draw time label (display based on precision)
-        const timeLabel = labelPrecision === 0 ?
-          `${t.toFixed(0)}` :
-          `${t.toFixed(labelPrecision)}`;
-        ctx.fillText(timeLabel, x, timeScaleY);
+        // 绘制时间标签 - 在ECG波形最下方
+        const timeLabel = t.toFixed(1);
+        ctx.fillText(timeLabel, x, maxDisplayY + 20);
       }
     }
 
-    // Smart small grid annotation - adjust based on large grid interval
-    ctx.strokeStyle = '#ff6b6b';
-    ctx.lineWidth = 0.3;
 
-    // Small grid interval is 1/5 of large grid (0.2/5 = 0.04 seconds)
-    const smallGridInterval = 0.04;
 
-    for (let t = 0; t <= maxTime; t += smallGridInterval) {
-      const x = paddingLeft + t * pixelsPerSecond;
-
-      // Only draw markings within data range and not large grid lines
-      if (x >= paddingLeft && x <= maxDisplayX && Math.abs(t % timeInterval) > 0.01) {
-        ctx.beginPath();
-        ctx.moveTo(x, rect.height - paddingBottom + 10);
-        ctx.lineTo(x, rect.height - paddingBottom + 25);
-        ctx.stroke();
-      }
-    }
-
-    // Add voltage scale - more precise markings
     ctx.textAlign = 'right';
     ctx.font = '11px Arial, sans-serif';
 
-    // Draw voltage markers on left side of grid
+
     const voltageScaleX = 45;
 
-    // Use previously defined voltage range
 
-    // Mark all large grid lines (every 0.5mV interval)
     ctx.strokeStyle = '#4a5568';
     ctx.lineWidth = 1;
-    for (let voltage = -voltageRange; voltage <= voltageRange; voltage += 0.5) { // 0.5mV interval
-      const y = centerY - (voltage * pixelsPerMV);
 
-      // Only draw markings within 1.5mV range
+    // 使用计算出的电压范围绘制标签
+    for (let voltage = minVoltage; voltage <= maxVoltage; voltage += 0.5) { // 0.5mV间隔
+      const y = centerY - (voltage * extendedPixelsPerMV);
+
+      // 只绘制在显示范围内的标签
       if (y >= minDisplayY && y <= maxDisplayY) {
-        // Draw voltage marker line
+        // 绘制电压标记线
         ctx.beginPath();
         ctx.moveTo(paddingLeft - 6, y);
         ctx.lineTo(paddingLeft, y);
         ctx.stroke();
 
-        // Draw voltage label (display every 0.5mV)
+        // 绘制电压标签
         const voltageText = voltage === 0 ? '0' :
           voltage > 0 ? `+${voltage.toFixed(1)}` :
             `${voltage.toFixed(1)}`;
-        ctx.fillText(voltageText, voltageScaleX, y + 3);
+        ctx.fillText(voltageText, paddingLeft - 10, y + 3);
       }
     }
 
@@ -514,7 +535,7 @@ const ECGViewer = () => {
     ctx.strokeStyle = '#ff6b6b';
     ctx.lineWidth = 0.3;
     for (let voltage = -voltageRange; voltage <= voltageRange; voltage += 0.1) { // 0.1mV interval
-      const y = centerY - (voltage * pixelsPerMV);
+      const y = centerY - (voltage * extendedPixelsPerMV);
 
       // Only draw markings within 1.5mV range and not large grid lines
       if (y >= minDisplayY && y <= maxDisplayY && Math.abs(voltage % 0.5) > 0.01) {
@@ -539,23 +560,21 @@ const ECGViewer = () => {
 
     // Y-axis label (voltage)
     ctx.save();
-    ctx.translate(45, centerY);
+    ctx.translate(25, centerY);
     ctx.rotate(-Math.PI / 2);
     ctx.textAlign = 'center';
     ctx.fillText('Amplitude (mV)', 0, 0);
     ctx.restore();
 
-    // X-axis label (time)
+    // X-axis label (time) - 在ECG波形最下方
     ctx.textAlign = 'center';
-    ctx.fillText('Time (s)', paddingLeft + contentWidth / 2, rect.height - 5);
+    ctx.fillText('Time (s)', paddingLeft + contentWidth / 2, maxDisplayY + 35); // 在时间标签下方
 
-    console.log('Single lead drawn successfully for lead:', leadIndex);
   }, [waveformData, samplingRate, leadNames]);
   // Function to load DICOM file - optimized with useCallback
   const loadDicomFile = React.useCallback(async (arrayBuffer, event) => {
     try {
       const fileName = event?.target?.files?.[0]?.name || 'unknown';
-      console.log(`========== Analyzing DICOM File: ${fileName} ==========`);
 
       const byteArray = new Uint8Array(arrayBuffer);
       const dataSet = dicomParser.parseDicom(byteArray);
@@ -564,13 +583,9 @@ const ECGViewer = () => {
       const sopClassUid = dataSet.string('x00080016');
       const modality = dataSet.string('x00080060');
 
-      console.log('Transfer Syntax:', transferSyntax);
-      console.log('SOP Class UID:', sopClassUid);
-      console.log('Modality:', modality);
 
       const container = document.getElementById(containerId);
       if (!container) {
-        console.error('Container not found');
         return;
       }
 
@@ -596,44 +611,28 @@ const ECGViewer = () => {
       container.appendChild(canvas);
       setCurrentCanvasId(canvasId); // Save canvas ID to state
 
-      console.log('Creating ECG viewer...');
       const leadIndex = selectedLead === "multiple" ? 0 : parseInt(selectedLead); // ⭐ New addition
       const leadDisplayNames = ['Lead I', 'Lead II', 'Lead III', 'aVR', 'aVL', 'aVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6'];
       const nameView = selectedLead === "multiple" ? '' : (leadDisplayNames[leadIndex] || '');
-      console.log('Lead index:', leadIndex, 'Selected lead:', selectedLead, 'nameView:', nameView);
 
       if (selectedLead === "multiple") {
         // Multiple mode: use DicomECGViewer
         const viewer = new DicomECGViewer(arrayBuffer, canvasId, 0);
         viewerRef.current = viewer;
-        console.log('Viewer created:', viewer);
 
         // Also parse data for comparison of data consistency
         const parentByteArray = new Uint8Array(arrayBuffer);
         const parentDataSet = dicomParser.parseDicom(parentByteArray);
-        const parsedLeads = parseWaveformData(parentDataSet, parentByteArray);
+        const parsedLeads = parseWaveformData(parentDataSet, parentByteArray, setSamplingRate);
 
-        console.log('Multiple lead mode - parsed data for comparison:', {
-          totalLeads: parsedLeads.length,
-          leadSamples: parsedLeads.map((lead, idx) => ({
-            lead: idx,
-            samples: lead.length,
-            firstFew: lead.slice(0, 10)
-          }))
-        });
 
-        console.log('Loading canvas...');
         try {
-          console.log('Loading ECG canvas...');
           await viewer.loadCanvas();
-          console.log('Canvas loaded successfully');
         } catch (loadError) {
-          console.error('Error loading canvas:', loadError);
           setError(`Failed to load canvas: ${loadError.message}`);
         }
       } else {
         // Single mode: use simplified manual parsing (implicit length 4 bytes), parse all leads
-        console.log('Single lead mode selected, parsing waveform for lead:', leadIndex, '(', nameView, ')');
         const parentByteArray = new Uint8Array(arrayBuffer);
         const parentDataSet = dicomParser.parseDicom(parentByteArray);
 
@@ -643,19 +642,10 @@ const ECGViewer = () => {
         const names = leadNameStr ? leadNameStr.split('\\') : leadDisplayNames;
         setLeadNames(names);
 
-        const parsedLeads = parseWaveformData(parentDataSet, parentByteArray);
+        const parsedLeads = parseWaveformData(parentDataSet, parentByteArray, setSamplingRate);
         if (parsedLeads && parsedLeads.length > 0) {
           setWaveformData(parsedLeads);
 
-          // Add debug info to ensure data consistency
-          console.log('Single lead parsed data:', {
-            leadIndex,
-            leadName: nameView,
-            totalLeads: parsedLeads.length,
-            currentLeadSamples: parsedLeads[leadIndex]?.length,
-            samplingRate: sr,
-            firstFewSamples: parsedLeads[leadIndex]?.slice(0, 10)
-          });
 
           // Use setTimeout to ensure drawing after state update
           setTimeout(() => {
@@ -667,7 +657,6 @@ const ECGViewer = () => {
       }
 
     } catch (error) {
-      console.error('Failed to load ECG:', error);
       setError(`Failed to load ECG: ${error.message}`);
     }
   }, [selectedLead, setError]);
@@ -676,15 +665,12 @@ const ECGViewer = () => {
     const loadInstanceFromOrthanc = async () => {
       try {
         setError(null);
-        console.log('Starting to load ECG file...');
 
-        console.log('Fetching ECG file for user:', userId, 'instance:', instanceId);
         const response = await request.get(
           API_ENDPOINTS.ECG_INSTANCE(userId, instanceId),
           { responseType: 'arraybuffer' }
         );
 
-        console.log('Array buffer received, loading DICOM file...');
         const byteArray = new Uint8Array(response);
         const dataSet = dicomParser.parseDicom(byteArray);
 
@@ -701,7 +687,6 @@ const ECGViewer = () => {
                 tags[tag] = value;
               }
             } catch (e) {
-              console.log('Could not read tag:', tag, e);
             }
           }
         }
@@ -710,14 +695,7 @@ const ECGViewer = () => {
 
 
         await loadDicomFile(response);
-        console.log('DICOM file loaded successfully');
       } catch (error) {
-        console.error('Detailed error:', {
-          message: error.message,
-          stack: error.stack,
-          name: error.name,
-          response: error.response
-        });
         message.error(error.message || 'Failed to load ECG file');
         setError(error.message || 'Failed to load ECG file');
       }
@@ -744,7 +722,6 @@ const ECGViewer = () => {
   // Handle selectedLead changes separately
   React.useEffect(() => {
     if (dicomArrayBuffer) {
-      console.log('Lead changed, reloading ECG with new lead:', selectedLead);
       loadDicomFile(dicomArrayBuffer);
     }
   }, [selectedLead, dicomArrayBuffer, loadDicomFile]);
@@ -754,7 +731,6 @@ const ECGViewer = () => {
     if (waveformData && selectedLead !== "multiple" && selectedLead !== null && currentCanvasId) {
       const leadIndex = parseInt(selectedLead);
       if (!isNaN(leadIndex)) {
-        console.log('WaveformData updated, redrawing single lead:', leadIndex, 'canvasId:', currentCanvasId);
         // Use setTimeout to ensure DOM is updated
         setTimeout(() => {
           drawSingleLead(currentCanvasId, leadIndex, waveformData);
@@ -765,112 +741,6 @@ const ECGViewer = () => {
 
 
 
-  const handleCtUpload = async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    setIsConverting(true);
-    setError(null);
-    setConversionProgress(0);
-    setShowProgress(true);
-    setConvertedDicomUrl(null); // Reset URL
-
-    const formData = new FormData();
-    formData.append('file', file);
-
-    try {
-      const uploadResponse = await fetch('http://localhost:8000/upload', {
-        method: 'POST',
-        body: formData
-      });
-
-      if (!uploadResponse.ok) {
-        throw new Error(`Upload failed: ${uploadResponse.statusText}`);
-      }
-
-      const uploadData = await uploadResponse.json();
-      const taskId = uploadData.task_id;
-      setCurrentTaskId(taskId);
-      setStatusMessage(`File uploaded, processing...\nTask ID: ${taskId}`);
-
-      // Clear previous timer
-      if (statusCheckIntervalRef.current) {
-        clearInterval(statusCheckIntervalRef.current);
-        statusCheckIntervalRef.current = null;
-      }
-
-      // Set new timer
-      statusCheckIntervalRef.current = setInterval(() => {
-        fetch(`http://localhost:8000/status/${taskId}`)
-          .then(response => {
-            if (!response.ok) {
-              throw new Error(`Failed to get status: ${response.statusText}`);
-            }
-            return response.json();
-          })
-          .then(data => {
-            console.log('Status check response:', data);
-
-            let statusText = `Status: ${data.status}\n`;
-            if (data.message) {
-              statusText += `Message: ${data.message}\n`;
-            }
-            if (data.error) {
-              statusText += `Error: ${data.error}\n`;
-              throw new Error(data.error);
-            }
-            setStatusMessage(statusText);
-
-            if (data.status === 'completed') {
-              // Clear timer immediately
-              if (statusCheckIntervalRef.current) {
-                clearInterval(statusCheckIntervalRef.current);
-                statusCheckIntervalRef.current = null;
-              }
-
-              if (data.dicom_files && data.dicom_files.length > 0) {
-                const downloadUrl = `http://localhost:8000/download/${taskId}/${data.dicom_files[0]}`;
-                console.log('Set download URL:', downloadUrl);
-                setConvertedDicomUrl(downloadUrl);
-                statusText += `\nConversion completed!\n`;
-                statusText += `File download URL: ${downloadUrl}\n`;
-                setStatusMessage(statusText);
-                setConversionProgress(100);
-                setIsConverting(false);
-              } else {
-                console.error('No dicom_files field or empty:', data);
-                setError('Server did not return DICOM file information');
-              }
-            } else if (data.status === 'processing') {
-              setConversionProgress(50);
-            } else if (data.status === 'failed') {
-              // Handle failed status
-              if (statusCheckIntervalRef.current) {
-                clearInterval(statusCheckIntervalRef.current);
-                statusCheckIntervalRef.current = null;
-              }
-              setError(`Conversion failed: ${data.error || 'Unknown error'}`);
-              setIsConverting(false);
-            }
-          })
-          .catch(error => {
-            console.error('Status check failed:', error);
-            setStatusMessage(`Error: ${error.message}`);
-            setShowProgress(false);
-            clearInterval(statusCheckIntervalRef.current);
-            statusCheckIntervalRef.current = null;
-            setIsConverting(false);
-            setConversionProgress(0);
-          });
-      }, 1000);
-
-    } catch (error) {
-      setStatusMessage(`Error: ${error.message}`);
-      setShowProgress(false);
-      setIsConverting(false);
-      setConversionProgress(0);
-    }
-  };
 
   const handleViewConverted = async () => {
     if (!convertedDicomUrl) return;
@@ -884,7 +754,6 @@ const ECGViewer = () => {
       await loadDicomFile(buffer);
       setError(null);
     } catch (error) {
-      console.error('Failed to load DICOM file:', error);
       setError(`Failed to load DICOM file: ${error.message}`);
     }
   };
@@ -1033,48 +902,6 @@ const ECGViewer = () => {
           </div>
         </div>
 
-        {/* ECG parameter display - reference MedDream style */}
-        {selectedLead !== "multiple" && waveformData && (
-          <div style={{
-            background: '#f8f9fa',
-            padding: '16px',
-            borderRadius: '8px',
-            border: '1px solid #e9ecef',
-            marginBottom: '16px'
-          }}>
-            <h4 style={{ margin: '0 0 12px 0', color: '#495057', fontSize: '16px' }}>
-              ECG Parameters - {leadNames[parseInt(selectedLead)] || `Lead ${parseInt(selectedLead) + 1}`}
-            </h4>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#6c757d' }}>Sampling Rate:</span>
-                <span style={{ fontWeight: 'bold', color: '#495057' }}>{samplingRate} Hz</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#6c757d' }}>Duration:</span>
-                <span style={{ fontWeight: 'bold', color: '#495057' }}>
-                  {waveformData[parseInt(selectedLead)] ?
-                    (waveformData[parseInt(selectedLead)].length / samplingRate).toFixed(1) + 's' :
-                    'N/A'
-                  }
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#6c757d' }}>Samples:</span>
-                <span style={{ fontWeight: 'bold', color: '#495057' }}>
-                  {waveformData[parseInt(selectedLead)] ?
-                    waveformData[parseInt(selectedLead)].length.toLocaleString() :
-                    'N/A'
-                  }
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#6c757d' }}>Scale:</span>
-                <span style={{ fontWeight: 'bold', color: '#495057' }}>10mm/mV</span>
-              </div>
-            </div>
-          </div>
-        )}
 
 
         {error && (
@@ -1158,7 +985,7 @@ const ECGViewer = () => {
                         <tr>
                           <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Type</th>
                           <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Probability</th>
-                          
+
                         </tr>
                       </thead>
                       <tbody>
@@ -1173,7 +1000,7 @@ const ECGViewer = () => {
                                 <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
                                   {prob ? `${(parseFloat(prob) * 100).toFixed(1)}%` : 'N/A'}
                                 </td>
-                                
+
                               </tr>
                             );
                           })}
@@ -1188,7 +1015,7 @@ const ECGViewer = () => {
                         <tr>
                           <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Type</th>
                           <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Probability</th>
-                          
+
                         </tr>
                       </thead>
                       <tbody>
@@ -1204,7 +1031,7 @@ const ECGViewer = () => {
                                 <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
                                   {prob ? `${(parseFloat(prob) * 100).toFixed(1)}%` : 'N/A'}
                                 </td>
-                                
+
                               </tr>
                             );
                           })}
