@@ -937,13 +937,13 @@ const PatientDetail = () => {
                                         });
                                         return (
                                           <div>
-                                            <div style={{ display: 'flex', flexDirection: 'row', gap: '16px' }}>
+                                            <div style={{ display: 'flex', flexDirection: 'row', gap: '24px', justifyContent: 'space-between' }}>
                                               {predictions.map((prediction, idx) => (
-                                                <div key={idx} style={{ flex: '0 0 auto', minWidth: '200px', maxWidth: '300px' }}>
+                                                <div key={idx} style={{ flex: '1', width: '48%', marginBottom: '16px' }}>
                                                   <div style={{ fontWeight: 'bold', marginBottom: '8px', color: '#1890ff' }}>
                                                     {prediction.title}
                                                   </div>
-                                                  <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'nowrap', gap: '4px' }}>
+                                                  <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
                                                     {prediction.pairs.map((pair, pairIdx) => {
                                                       // Calculate percentage and determine color
                                                       const percentage = Math.round(pair.probability * 100);
@@ -956,11 +956,14 @@ const PatientDetail = () => {
                                                           backgroundColor: '#f9f9f9',
                                                           border: `1px solid ${color}`,
                                                           borderRadius: '3px',
-                                                          padding: '4px 6px'
+                                                          padding: '6px 8px',
+                                                          minWidth: '80px',
+                                                          flex: '1 0 auto',
+                                                          marginBottom: '4px'
                                                         }}>
-                                                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1px' }}>
-                                                            <span style={{ fontWeight: 'bold', fontSize: '11px' }}>{pair.disease}</span>
-                                                            <span style={{ color, fontWeight: 'bold', fontSize: '11px' }}>{percentage}%</span>
+                                                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                                            <span style={{ fontWeight: 'bold', fontSize: '12px' }}>{pair.disease}</span>
+                                                            <span style={{ color, fontWeight: 'bold', fontSize: '12px' }}>{percentage}%</span>
                                                           </div>
                                                           <Progress 
                                                             percent={percentage}
