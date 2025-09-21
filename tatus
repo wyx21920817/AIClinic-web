@@ -1,0 +1,48 @@
+[1mdiff --git a/src/pages/patients/PatientDetail.js b/src/pages/patients/PatientDetail.js[m
+[1mindex d877352..a3b1764 100644[m
+[1m--- a/src/pages/patients/PatientDetail.js[m
+[1m+++ b/src/pages/patients/PatientDetail.js[m
+[36m@@ -53,6 +53,7 @@[m [mconst PatientDetail = () => {[m
+   const [fileModalVisible, setFileModalVisible] = useState(false);[m
+   const [aiDiagnosis, setAiDiagnosis] = useState({});[m
+   const [diagnosisLoading, setDiagnosisLoading] = useState({});[m
+[32m+[m[32m  const [renamedFiles, setRenamedFiles] = useState(new Map()); // Store renamed filenames[m
+ [m
+ [m
+   const fetchPatient = async () => {[m
+[36m@@ -334,6 +335,11 @@[m [mconst PatientDetail = () => {[m
+     return 'ECG';[m
+   };[m
+ [m
+[32m+[m[32m  // Get display filename (renamed if available, otherwise original)[m
+[32m+[m[32m  const getDisplayFilename = (file) => {[m
+[32m+[m[32m    return renamedFiles.get(file.file_id) || file.filename;[m
+[32m+[m[32m  };[m
+[32m+[m
+   // Rename DCM file with patient name and disease, ensure proper extension and MIME type[m
+   const renameDcmFile = (file, patientName) => {[m
+     const disease = extractDiseaseFromFilename(file.name);[m
+[36m@@ -367,7 +373,13 @@[m [mconst PatientDetail = () => {[m
+ [m
+       console.log(`Uploading file as: ${renamedFile.name}`);[m
+ [m
+[31m-      await patientsApi.uploadEcgFile(patient.id, renamedFile);[m
+[32m+[m[32m      const response = await patientsApi.uploadEcgFile(patient.id, renamedFile);[m
+[32m+[m[41m      [m
+[32m+[m[32m      // Store the renamed filename mapping[m
+[32m+[m[32m      if (response && response.file_id) {[m
+[32m+[m[32m        setRenamedFiles(prev => new Map(prev).set(response.file_id, renamedFile.name));[m
+[32m+[m[32m      }[m
+[32m+[m[41m      [m
+       message.success('ECG file uploaded successfully');[m
+       fetchEcgFiles();[m
+       return false; // Prevent default upload behavior[m
+[36m@@ -665,7 +677,7 @@[m [mconst PatientDetail = () => {[m
+               ]}[m
+             >[m
+               <List.Item.Meta[m
+[31m-                title={file.filename}[m
+[32m+[m[32m                title={getDisplayFilename(file)}[m
+                 description={[m
+                   <Space direction="vertical" style={{ width: '100%' }}>[m
+                     <div>created at: {dayjs(file.created_at).tz(PERTH_TZ).format('YYYY-MM-DD HH:mm:ss')} ({PERTH_TZ})</div>[m

@@ -438,7 +438,7 @@ const ECGViewer = () => {
       if (x > maxDisplayX) break;
 
 
-      const voltageMV = samples[i] / 1000; // 转换为mV
+      const voltageMV = samples[i] / 1000;
       const y = centerY - (voltageMV * extendedPixelsPerMV);
 
       if (!hasMoved) {
