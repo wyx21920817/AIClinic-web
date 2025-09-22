@@ -24,8 +24,7 @@ import {
   CheckCircleOutlined,
   ExclamationCircleOutlined,
   BarChartOutlined,
-  ReloadOutlined,
-  BellOutlined
+  ReloadOutlined
 } from '@ant-design/icons';
 import styled from '@emotion/styled';
 import { useNavigate } from 'react-router-dom';
@@ -423,16 +422,6 @@ const Dashboard = () => {
                   onClick={() => navigate('/audit-logs')}
                 >
                   Audit Logs
-                </Button>
-              </Col>
-              <Col xs={12} sm={6}>
-                <Button 
-                  type="primary" 
-                  icon={<BellOutlined />}
-                  block
-                  onClick={() => navigate('/test-deliverables')}
-                >
-                  Test Results
                 </Button>
               </Col>
             </Row>

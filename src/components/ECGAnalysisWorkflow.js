@@ -29,7 +29,7 @@ import PDFReportExport from './PDFReportExport';
 import ECGViewer from './ECGViewer';
 
 // Import API services
-import { ecgAPI, feedbackAPI, pdfAPI, aiDiagnosisAPI, handleAPIError } from '../services/api/ecg';
+import { ecgAPI, pdfAPI, aiDiagnosisAPI, handleAPIError } from '../services/api/ecg';
 
 const { Title, Text } = Typography;
 const { Step } = Steps;
@@ -143,23 +143,38 @@ const ECGAnalysisWorkflow = ({
     }
   };
 
-  // Step 2: Handle Doctor Feedback
+  // Step 2: Handle Doctor Feedback (update ECG file with notes and optionally approved_status)
   const handleFeedbackSubmit = async (feedbackData) => {
     setLoading(true);
     
     try {
-      const feedbackResponse = await feedbackAPI.submitFeedback({
-        ...feedbackData,
+      // notes is the feedback; include approved_status only if provided
+      const approved = feedbackData.approved;
+      await ecgAPI.updateECGFile(
+        patientId,
+        ecgFileId,
+        feedbackData.comment || '',
+        '',
+        approved
+      );
+      
+      // Persist locally for report export step
+      setDoctorFeedback({
+        notes: feedbackData.comment || '',
+        approved_status: !!feedbackData.approved,
+        timestamp: new Date().toISOString(),
+        doctorId,
         ecgFileId,
         patientId,
-        doctorId,
         aiDiagnosisId: aiDiagnosis?.id
       });
       
-      setDoctorFeedback(feedbackResponse);
-      setCurrentStep(3); // Move to Export step
+      // Advance only when an approval decision is made; keep step if notes-only
+      if (approved === true || approved === false) {
+        setCurrentStep(3);
+      }
       
-      message.success('Feedback submitted successfully!');
+      message.success(approved === undefined ? 'Notes saved' : 'Feedback submitted successfully!');
       
     } catch (error) {
       handleAPIError(error);
@@ -176,17 +191,26 @@ const ECGAnalysisWorkflow = ({
     try {
       message.info('Submitting re-analysis request...');
       
-      // Submit feedback with re-analysis request
-      const feedbackResponse = await feedbackAPI.submitFeedback({
-        ...feedbackData,
+      // Update ECG file with feedback notes; mark not approved to trigger re-analysis flow
+      await ecgAPI.updateECGFile(
+        patientId,
+        ecgFileId,
+        feedbackData.comment || '',
+        '',
+        false
+      );
+
+      // Persist locally for UI
+      setDoctorFeedback({
+        notes: feedbackData.comment || '',
+        approved_status: false,
+        timestamp: new Date().toISOString(),
+        doctorId,
         ecgFileId,
         patientId,
-        doctorId,
         aiDiagnosisId: aiDiagnosis?.id,
         requestReanalysis: true
       });
-      
-      setDoctorFeedback(feedbackResponse);
       
       // Generate new AI diagnosis with doctor's feedback
       message.info('Generating new AI diagnosis with your feedback...');

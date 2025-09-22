@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Card, Row, Col, Typography, Button, Select, Space, Alert, Divider } from 'antd';
-import { UserOutlined, TeamOutlined, SecurityScanOutlined } from '@ant-design/icons';
+import { UserOutlined } from '@ant-design/icons';
 import styled from '@emotion/styled';
 import useRole from '../utils/useRole';
 import { USER_ROLES, ROLE_PERMISSIONS, ROLE_DISPLAY_NAMES } from '../constants/Constants';
@@ -167,45 +167,7 @@ const RoleTest = () => {
         </Col>
       </Row>
 
-      <Divider />
-
-      <Row gutter={[24, 24]}>
-        <Col span={8}>
-          <StyledCard>
-            <div style={{ textAlign: 'center' }}>
-              <TeamOutlined style={{ fontSize: 48, color: '#1890ff', marginBottom: 16 }} />
-              <Title level={4}>Doctor Dashboard</Title>
-              <Text type="secondary">
-                Patient-focused interface with ECG analysis tools, AI alerts, and patient management features.
-              </Text>
-            </div>
-          </StyledCard>
-        </Col>
-
-        <Col span={8}>
-          <StyledCard>
-            <div style={{ textAlign: 'center' }}>
-              <SecurityScanOutlined style={{ fontSize: 48, color: '#722ed1', marginBottom: 16 }} />
-              <Title level={4}>Admin Dashboard</Title>
-              <Text type="secondary">
-                System overview with user management, audit logs, analytics, and system health monitoring.
-              </Text>
-            </div>
-          </StyledCard>
-        </Col>
-
-        <Col span={8}>
-          <StyledCard>
-            <div style={{ textAlign: 'center' }}>
-              <UserOutlined style={{ fontSize: 48, color: '#52c41a', marginBottom: 16 }} />
-              <Title level={4}>User Dashboard</Title>
-              <Text type="secondary">
-                Basic interface for users with limited permissions and profile management.
-              </Text>
-            </div>
-          </StyledCard>
-        </Col>
-      </Row>
+      {/* Content below Go to Dashboard removed as requested */}
     </PageContainer>
   );
 };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Card,
   Button,
@@ -10,18 +10,14 @@ import {
   Form,
   Rate,
   Tag,
-  Divider,
   Alert,
-  Tooltip,
   Row,
   Col
 } from 'antd';
 import {
   CheckCircleOutlined,
   CloseCircleOutlined,
-  CommentOutlined,
   EyeOutlined,
-  SendOutlined,
   SaveOutlined,
   ExclamationCircleOutlined,
   CheckOutlined,
@@ -116,7 +112,7 @@ const DoctorFeedbackInterface = ({
 
   const renderFeedbackButtons = () => (
     <Row gutter={16} style={{ marginBottom: 16 }}>
-      <Col span={12}>
+      <Col span={8}>
         <Button
           type="primary"
           icon={<CheckCircleOutlined />}
@@ -133,7 +129,7 @@ const DoctorFeedbackInterface = ({
           ✅ Approve AI Diagnosis
         </Button>
       </Col>
-      <Col span={12}>
+      <Col span={8}>
         <Button
           danger
           icon={<CloseCircleOutlined />}
@@ -144,6 +140,36 @@ const DoctorFeedbackInterface = ({
           style={{ height: '48px' }}
         >
           ❌ Correct AI Diagnosis
+        </Button>
+      </Col>
+      <Col span={8}>
+        <Button
+          icon={<SaveOutlined />}
+          size="large"
+          block
+          onClick={async () => {
+            setIsSubmitting(true);
+            try {
+              await onFeedbackSubmit({
+                approved: undefined,
+                comment: feedback.comment,
+                timestamp: new Date().toISOString(),
+                patientId,
+                ecgFileId,
+                doctorId,
+                aiDiagnosisId: aiDiagnosis?.id
+              });
+              message.success('Notes saved');
+              setFeedback(prev => ({ ...prev, timestamp: new Date().toISOString() }));
+            } catch (e) {
+              message.error('Failed to save notes');
+            } finally {
+              setIsSubmitting(false);
+            }
+          }}
+          style={{ height: '48px' }}
+        >
+          💾 Save Notes Only
         </Button>
       </Col>
     </Row>

@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { Card, Typography, Button, Spin, Alert, Row, Col, Divider, Tag, Space, Progress, Tabs, Image, Form, Input, Checkbox, Modal, List, Select, message } from 'antd';
-import { ArrowLeftOutlined, EditOutlined, DownloadOutlined } from '@ant-design/icons';
+import { Card, Typography, Button, Spin, Alert, Row, Col, Divider, Tag, Space, Tabs, Image, Form, Input, List, message, Modal, Table } from 'antd';
+import { ArrowLeftOutlined, DownloadOutlined } from '@ant-design/icons';
 import { aiDiagnosisAPI, ecgAPI, feedbackAPI } from '../services/api/ecg';
-import { API_BASE_URL } from '../services/api/config';
 
-const { Title, Text, Paragraph } = Typography;
+const { Title, Text } = Typography;
 
 // Function to format report text with proper line breaks and structure
 const formatReportText = (text) => {
@@ -34,13 +33,16 @@ const XAIResultPage = () => {
   const [approveLoading, setApproveLoading] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [form] = Form.useForm();
+  const [feedbackForm] = Form.useForm();
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [userId, setUserId] = useState(null); // We'll need the user ID for the API call
   const [ecgInfo, setEcgInfo] = useState({
     notes: '',
     tags: '',
     approved_status: false
   });
-  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  // Doctor feedback modal removed; using only bottom feedback form
   const [feedbackList, setFeedbackList] = useState([]);
   
   // Get the selected diseases from navigation state or URL query (?d=AFIB&d=LBBB)
@@ -172,44 +174,7 @@ const XAIResultPage = () => {
   
   // Update ECG handler removed with inline notes section
   
-  const handleApprove = async () => {
-    if (!userId || !instanceId) {
-      message.error('Missing user ID or instance ID');
-      return;
-    }
-    
-    try {
-      setApproveLoading(true);
-      
-      // Call the API to update just the approved status
-      await ecgAPI.updateECGFile(
-        userId,
-        instanceId,
-        ecgInfo.notes,
-        ecgInfo.tags,
-        true // Set to approved
-      );
-      
-      // Update local state
-      setEcgInfo({
-        ...ecgInfo,
-        approved_status: true
-      });
-      
-      // Update form values
-      form.setFieldsValue({
-        ...form.getFieldsValue(),
-        approved_status: true
-      });
-      
-      message.success('ECG file approved successfully');
-    } catch (err) {
-      console.error('Error approving ECG file:', err);
-      message.error(err.message || 'Failed to approve ECG file');
-    } finally {
-      setApproveLoading(false);
-    }
-  };
+  // removed unused handleApprove
   
   // Handle downloading the interpretation PDF
   const handleDownloadPDF = async () => {
@@ -320,39 +285,37 @@ const XAIResultPage = () => {
   const handleSubmitFeedback = async (values) => {
     try {
       const id = currentInstanceId;
-      await feedbackAPI.submitFeedback({
-        instance_id: id,
-        feedback: values.feedback,
-        tags: values.tags || '',
-        status: values.status
-      });
-      message.success('Feedback submitted');
-      setFeedbackOpen(false);
+      const uid = isMultiInstance ? (interpretationsByInstance[id]?.ecg_file?.patient_id) : userId;
+      if (!uid) throw new Error('Missing user ID');
+      // Replace notes with only the latest note (no history)
+      const newNotes = `[${new Date().toLocaleString()}] Doctor feedback: ${values.feedback}`;
+      // Save notes only; omit approved_status
+      await ecgAPI.updateECGFile(uid, id, newNotes, '', undefined);
+      if (!isMultiInstance) {
+        setEcgInfo(prev => ({ ...prev, notes: newNotes }));
+      } else {
+        setInterpretationsByInstance(prev => ({
+          ...prev,
+          [id]: {
+            ...prev[id],
+            ecg_file: { ...(prev[id]?.ecg_file || {}), notes: newNotes }
+          }
+        }));
+      }
       // Append to bottom of list
       setFeedbackList(prev => [...prev, {
         id: `local-${Date.now()}`,
         instance_id: id,
         details: values.feedback,
         tags: values.tags || '',
-        status: values.status,
+        status: 'notes',
         timestamp: new Date().toISOString()
       }]);
+      // Close and reset modal form
+      try { feedbackForm.resetFields(); } catch (_) {}
+      setShowFeedbackModal(false);
+      message.success('Feedback submitted');
     } catch (err) {
-      // Graceful fallback if backend route not available (404)
-      if (err?.response?.status === 404) {
-        const id = currentInstanceId;
-        setFeedbackList(prev => [...prev, {
-          id: `local-${Date.now()}`,
-          instance_id: id,
-          details: values.feedback,
-          tags: values.tags || '',
-          status: values.status,
-          timestamp: new Date().toISOString()
-        }]);
-        setFeedbackOpen(false);
-        message.warning('Server feedback API not found (404). Saved locally for now.');
-        return;
-      }
       console.error('Feedback error:', err);
       message.error(err.message || 'Failed to submit feedback');
     }
@@ -366,23 +329,7 @@ const XAIResultPage = () => {
     );
   }
 
-  if (error) {
-    return (
-      <div className="page-container" style={{ padding: '20px' }}>
-        <Alert
-          message="Error"
-          description={error}
-          type="error"
-          showIcon
-          action={
-            <Button type="primary" onClick={handleBack}>
-              Go Back
-            </Button>
-          }
-        />
-      </div>
-    );
-  }
+  // Do not hard-stop the page on error; show banner instead
 
   // Render a disease tab content
   const renderDiseaseTab = (result, index) => {
@@ -557,6 +504,15 @@ const XAIResultPage = () => {
           .ant-tabs-tab:hover .xai-tab-label { background: #f0f5ff; box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
         `}
       </style>
+      {error && (
+        <Alert
+          style={{ marginBottom: 12 }}
+          message="Interpretation Error"
+          description={error}
+          type="error"
+          showIcon
+        />
+      )}
       <Button 
         icon={<ArrowLeftOutlined />} 
         onClick={handleBack} 
@@ -569,8 +525,8 @@ const XAIResultPage = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
           <Title level={2}>ECG Interpretation Results</Title>
           <Space wrap>
-            <Button onClick={() => setFeedbackOpen(true)}>Doctor Feedback</Button>
             <Button onClick={handleApproveCurrent} type="primary" loading={approveLoading} style={{ backgroundColor: '#52c41a', borderColor: '#52c41a' }}>Approve ECG</Button>
+            <Button onClick={() => setShowFeedbackModal(true)}>Doctor Feedback</Button>
             <Button onClick={() => (isMultiInstance ? handleDownloadPDFFor(currentInstanceId) : handleDownloadPDF())} icon={<DownloadOutlined />} loading={pdfLoading}>
               Download PDF
             </Button>
@@ -649,77 +605,98 @@ const XAIResultPage = () => {
         )}
       </Card>
 
-      {/* Feedback history at bottom */}
-      <Card title="Doctor Feedback" style={{ marginTop: 16 }}>
-        {/* Global approved badge removed; status shown per feedback item below */}
-        {/* Latest feedback preview removed to avoid duplicate notes display */}
-        {feedbackList && feedbackList.length > 0 ? (
-          <List
-            dataSource={feedbackList}
-            renderItem={(item) => (
-              <List.Item style={{ padding: 0, border: 'none' }}>
-                <Card size="small" style={{ width: '100%' }} bodyStyle={{ padding: 12 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                    <Space size={8} wrap>
-                      <Text strong>Status:</Text>
-                      {item.status && (
-                        <Tag color={item.status === 'approve' ? 'green' : 'gold'}>
-                          {item.status === 'approve' ? 'Approve ECG' : 'Correct ECG'}
-                        </Tag>
-                      )}
-                    </Space>
-                    <Text type="secondary" style={{ fontSize: 12 }}>
-                      {new Date(item.timestamp || item.created_at || Date.now()).toLocaleString()}
-                    </Text>
-                  </div>
-                  <div style={{ whiteSpace: 'pre-line' }}>
-                    <Text strong>Notes: </Text>
-                    <Text>{item.details || item.feedback || ''}</Text>
-                  </div>
-                  {(item.tags && String(item.tags).trim() !== '') && (
-                    <div style={{ marginTop: 8 }}>
-                      <Tag>{item.tags}</Tag>
+      {/* Feedback history at bottom - centered layout */}
+      <Card title="Doctor Feedback" headStyle={{ textAlign: 'center' }} style={{ marginTop: 16 }}>
+        <Row justify="center">
+          <Col xs={24} sm={20} md={16} lg={12} xl={10}>
+            {feedbackList && feedbackList.length > 0 ? (
+              (() => {
+                const last = feedbackList[feedbackList.length - 1] || {};
+                return (
+                  <Card size="small" bodyStyle={{ padding: 12 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {new Date(last.timestamp || last.created_at || Date.now()).toLocaleString()}
+                      </Text>
                     </div>
-                  )}
-                </Card>
-              </List.Item>
+                    <div style={{ whiteSpace: 'pre-line', marginTop: 8 }}>
+                      <Text strong>Doctor feedback: </Text>
+                      <Text>{last.details || last.feedback || ''}</Text>
+                    </div>
+                    {(last.tags && String(last.tags).trim() !== '') && (
+                      <div style={{ marginTop: 8 }}>
+                        <Tag>{last.tags}</Tag>
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 12 }}>
+                      <Button type="primary" onClick={() => setShowFeedbackModal(true)}>Give Feedback</Button>
+                      {feedbackList && feedbackList.length > 0 && (
+                        <Button onClick={() => setShowHistoryModal(true)}>View Feedback History</Button>
+                      )}
+                    </div>
+                  </Card>
+                );
+              })()
+            ) : (
+              <div style={{ textAlign: 'center' }}>
+                <Text type="secondary">No feedback yet.</Text>
+                <div style={{ marginTop: 12 }}>
+                  <Button type="primary" onClick={() => setShowFeedbackModal(true)}>Give Feedback</Button>
+                </div>
+              </div>
             )}
-          />
-        ) : (
-          <Text type="secondary">No feedback yet.</Text>
-        )}
+          </Col>
+        </Row>
       </Card>
 
       {/* Doctor Feedback Modal */}
       <Modal
         title="Doctor Feedback"
-        open={feedbackOpen}
-        onCancel={() => setFeedbackOpen(false)}
-        footer={null}
+        open={showFeedbackModal}
+        onCancel={() => setShowFeedbackModal(false)}
+        onOk={() => feedbackForm.submit()}
+        okText="Submit"
       >
-        <Form layout="vertical" onFinish={handleSubmitFeedback} initialValues={{ status: 'approve' }}>
-          <Form.Item name="status" label="Status" rules={[{ required: true, message: 'Please choose status' }]}>
-            <Select
-              options={[
-                { label: 'Approve ECG', value: 'approve' },
-                { label: 'Correct ECG', value: 'correct' }
-              ]}
-            />
-          </Form.Item>
-          <Form.Item name="feedback" label="Feedback" rules={[{ required: true, message: 'Please enter feedback' }]}>
-            <Input.TextArea rows={4} placeholder="Your clinical feedback" />
-          </Form.Item>
+        <Form layout="vertical" form={feedbackForm} onFinish={handleSubmitFeedback}>
           <Form.Item name="tags" label="Tags">
             <Input placeholder="Comma separated" />
           </Form.Item>
-          <Form.Item>
-            <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
-              <Button onClick={() => setFeedbackOpen(false)}>Cancel</Button>
-              <Button type="primary" htmlType="submit">Submit</Button>
-            </Space>
+          <Form.Item name="feedback" label="Feedback" rules={[{ required: true, message: 'Please enter feedback' }]}> 
+            <Input.TextArea rows={4} placeholder="Your clinical feedback" />
           </Form.Item>
         </Form>
       </Modal>
+
+      {/* Feedback History Modal (tabular) */}
+      <Modal
+        title="Feedback History"
+        open={showHistoryModal}
+        onCancel={() => setShowHistoryModal(false)}
+        footer={null}
+        width={800}
+      >
+        <Table
+          size="middle"
+          pagination={{ pageSize: 8 }}
+          rowKey={(r, idx) => r.id || `${r.instance_id || 'inst'}-${r.timestamp || idx}`}
+          dataSource={(feedbackList || []).map((f) => ({
+            time: new Date(f.timestamp || f.created_at || Date.now()).toLocaleString(),
+            feedback: f.details || f.feedback || '',
+            tags: f.tags || '',
+            status: f.status || ''
+          }))}
+          columns={[
+            { title: 'Time', dataIndex: 'time', key: 'time', width: 200 },
+            { title: 'Doctor Feedback', dataIndex: 'feedback', key: 'feedback' },
+            { title: 'Tags', dataIndex: 'tags', key: 'tags', width: 180 },
+            { title: 'Status', dataIndex: 'status', key: 'status', width: 120 }
+          ]}
+        />
+      </Modal>
+
+      
+
+      {/* Doctor Feedback Modal removed */}
 
       {/* Update ECG Modal removed per request */}
     </div>
