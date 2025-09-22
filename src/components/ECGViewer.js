@@ -2,7 +2,7 @@ import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { DicomECGViewer } from 'ecg-dicom-web-viewer';
 import dicomParser from 'dicom-parser';
-import { Card, Space, Typography, Upload, Progress, Row, Col, Button, message, Select } from 'antd'; // ⭐ Modified: Import Select component
+import { Card, Space, Typography, Upload, Progress, Row, Col, Button, message, Select, Checkbox } from 'antd'; // ⭐ Modified: Import Select and Checkbox components
 import { InboxOutlined, FileImageOutlined, ArrowLeftOutlined, ExperimentOutlined } from '@ant-design/icons';
 import request from '../services/api/request';
 import { API_ENDPOINTS } from '../services/api/config';
@@ -86,13 +86,46 @@ const ECGViewer = () => {
   const viewerRef = React.useRef(null);
   const containerId = 'ecg-container';
 
-  const [selectedLead, setSelectedLead] = React.useState("multiple"); // ⭐ New addition
+  const [selectedLead, setSelectedLead] = React.useState("multiple"); // ⭐ Keep for backward compatibility
+  const [selectedLeads, setSelectedLeads] = React.useState([]); // ⭐ New: Array of selected lead indices
+  const [isMultipleMode, setIsMultipleMode] = React.useState(true); // ⭐ New: Track if in multiple mode
   const [dicomArrayBuffer, setDicomArrayBuffer] = React.useState(null); // Store DICOM data
   const [waveformData, setWaveformData] = React.useState(null); // 2D array: [lead][samples]
   const [samplingRate, setSamplingRate] = React.useState(500);
   const [leadNames, setLeadNames] = React.useState([]);
   const [currentCanvasId, setCurrentCanvasId] = React.useState(null); // Store current canvas ID
   const [selectedDiseasesXAI, setSelectedDiseasesXAI] = React.useState([]);
+
+  // Lead selection handlers
+  const handleMultipleModeChange = (checked) => {
+    setIsMultipleMode(checked);
+    if (checked) {
+      setSelectedLeads([]);
+      setSelectedLead("multiple");
+    } else {
+      setSelectedLead("0"); // Default to first lead
+    }
+  };
+
+  const handleSingleLeadChange = (leadIndex, checked) => {
+    if (checked) {
+      // Add lead if not already selected and not more than 2
+      if (selectedLeads.length < 2 && !selectedLeads.includes(leadIndex)) {
+        const newSelectedLeads = [...selectedLeads, leadIndex];
+        setSelectedLeads(newSelectedLeads);
+        setSelectedLead(leadIndex.toString());
+      }
+    } else {
+      // Remove lead
+      const newSelectedLeads = selectedLeads.filter(lead => lead !== leadIndex);
+      setSelectedLeads(newSelectedLeads);
+      if (newSelectedLeads.length > 0) {
+        setSelectedLead(newSelectedLeads[0].toString());
+      } else {
+        setSelectedLead("0");
+      }
+    }
+  };
 
   // Adjustable display parameters (reference Weasis)
   const [mmPerSecond, setMmPerSecond] = React.useState(25); // Speed: 25/50 mm/s
@@ -286,11 +319,11 @@ const ECGViewer = () => {
     const ctx = canvas.getContext('2d');
     const rect = canvas.getBoundingClientRect();
 
-    // 🔥 Weasis标准布局参数
-    const paddingLeft = 80;
-    const paddingBottom = 50;
-    const paddingTop = 40;
-    const paddingRight = 30;
+    // 🔥 Weasis标准布局参数 - 优化padding以确保所有信息完全显示
+    const paddingLeft = 100;  // 增加左侧空间以容纳Y轴标签和电压标尺
+    const paddingBottom = 80; // 增加底部空间以容纳时间轴标签
+    const paddingTop = 60;    // 增加顶部空间以容纳lead标签
+    const paddingRight = 50;  // 增加右侧空间以防止内容被截断
 
     const contentWidth = rect.width - paddingLeft - paddingRight;
     const contentHeight = rect.height - paddingTop - paddingBottom;
@@ -361,9 +394,9 @@ const ECGViewer = () => {
     const gridPaddingFactor = 0.8;
     const extendedPixelsPerMV = pixelsPerMV * (1 + gridPaddingFactor);
 
-    // 使用实际的minVoltage和maxVoltage计算显示范围，避免多余空白
-    const minDisplayY = centerY - (maxVoltage * extendedPixelsPerMV);
-    const maxDisplayY = centerY - (minVoltage * extendedPixelsPerMV);
+    // 使用实际的minVoltage和maxVoltage计算显示范围，但限制在canvas范围内
+    const minDisplayY = Math.max(paddingTop, centerY - (maxVoltage * extendedPixelsPerMV));
+    const maxDisplayY = Math.min(rect.height - paddingBottom, centerY - (minVoltage * extendedPixelsPerMV));
 
 
 
@@ -441,15 +474,30 @@ const ECGViewer = () => {
       const voltageMV = samples[i] / 1000;
       const y = centerY - (voltageMV * extendedPixelsPerMV);
 
+      // 限制y坐标在显示区域内，避免波形超出边界
+      const clampedY = Math.max(minDisplayY, Math.min(maxDisplayY, y));
+
       if (!hasMoved) {
-        ctx.moveTo(x, y);
+        ctx.moveTo(x, clampedY);
         hasMoved = true;
       } else {
-        ctx.lineTo(x, y);
+        ctx.lineTo(x, clampedY);
       }
     }
     ctx.stroke();
 
+    // Draw lead borders (top and bottom)
+    ctx.strokeStyle = '#ff6b6b';
+    ctx.lineWidth = 1.2;
+    ctx.globalAlpha = 1.0;
+    ctx.beginPath();
+    // Top border
+    ctx.moveTo(paddingLeft, minDisplayY);
+    ctx.lineTo(maxDisplayX, minDisplayY);
+    // Bottom border
+    ctx.moveTo(paddingLeft, maxDisplayY);
+    ctx.lineTo(maxDisplayX, maxDisplayY);
+    ctx.stroke();
 
     // Add baseline reference line - finer dashed line, only in data area
     ctx.strokeStyle = '#ff6b6b';
@@ -466,21 +514,16 @@ const ECGViewer = () => {
     ctx.fillStyle = '#2d3748';
     ctx.font = 'bold 16px Arial, sans-serif';
     ctx.textAlign = 'left';
-    ctx.fillText(leadName, paddingLeft, paddingTop - 8);
-
+    ctx.fillText(leadName, paddingLeft, paddingTop - 15); // 调整位置以适应新的padding
 
     ctx.fillStyle = '#4a5568';
     ctx.font = '11px Arial, sans-serif';
     ctx.textAlign = 'center';
 
-
     const timeScaleY = rect.height - paddingBottom + 5; // 贴着横轴边
-
 
     const timeInterval = 0.2;
     const maxTime = displayDuration;
-
-
 
     // 绘制横轴时间标签 - 直接在横轴位置标记
     ctx.strokeStyle = '#4a5568';
@@ -495,7 +538,7 @@ const ECGViewer = () => {
       if (x >= paddingLeft && x <= maxDisplayX) {
         // 绘制时间标签 - 在ECG波形最下方
         const timeLabel = t.toFixed(1);
-        ctx.fillText(timeLabel, x, maxDisplayY + 20);
+        ctx.fillText(timeLabel, x, maxDisplayY + 10);
       }
     }
 
@@ -560,7 +603,7 @@ const ECGViewer = () => {
 
     // Y-axis label (voltage)
     ctx.save();
-    ctx.translate(25, centerY);
+    ctx.translate(35, centerY); // 调整位置以适应新的padding
     ctx.rotate(-Math.PI / 2);
     ctx.textAlign = 'center';
     ctx.fillText('Amplitude (mV)', 0, 0);
@@ -568,9 +611,764 @@ const ECGViewer = () => {
 
     // X-axis label (time) - 在ECG波形最下方
     ctx.textAlign = 'center';
-    ctx.fillText('Time (s)', paddingLeft + contentWidth / 2, maxDisplayY + 35); // 在时间标签下方
+    ctx.fillText('Time (s)', paddingLeft + contentWidth / 2, rect.height - 20); // 调整位置以适应新的padding
 
   }, [waveformData, samplingRate, leadNames]);
+
+  // Professional ECG dual leads rendering - reference the image style
+  const drawDualLeads = React.useCallback((canvasId, leadIndices, waveformDataToUse = null) => {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) {
+      return;
+    }
+
+    if (canvas.tagName !== 'CANVAS') {
+      return;
+    }
+
+    const dataToUse = waveformDataToUse || waveformData;
+    if (!dataToUse || leadIndices.length < 2 || !dataToUse[leadIndices[0]] || !dataToUse[leadIndices[1]]) {
+      return;
+    }
+
+    const leadDisplayNames = ['Lead I', 'Lead II', 'Lead III', 'aVR', 'aVL', 'aVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6'];
+    const lead1Samples = dataToUse[leadIndices[0]];
+    const lead2Samples = dataToUse[leadIndices[1]];
+
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.getBoundingClientRect();
+
+    // 🔥 Dual lead layout parameters - 优化padding以确保所有信息完全显示
+    const paddingLeft = 100;  // 增加左侧空间以容纳Y轴标签和电压标尺
+    const paddingBottom = 80; // 增加底部空间以容纳时间轴标签
+    const paddingTop = 60;    // 增加顶部空间以容纳lead标签
+    const paddingRight = 50;  // 增加右侧空间以防止内容被截断
+    const leadSpacing = 30;   // 增加lead之间的间距
+
+    const contentWidth = rect.width - paddingLeft - paddingRight;
+    const contentHeight = rect.height - paddingTop - paddingBottom;
+    const leadHeight = (contentHeight - leadSpacing) / 2; // Each lead gets half the height minus spacing
+
+    canvas.width = rect.width * window.devicePixelRatio;
+    canvas.height = rect.height * window.devicePixelRatio;
+    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+
+    const pixelsPerMM = 5;  // 1mm = 5px (Weasis标准)
+    const pixelsPerSecond = mmPerSecond * pixelsPerMM; // 25mm/s * 5px/mm = 125px/s
+    const pixelsPerMV = mmPerMV * pixelsPerMM;         // 10mm/mV * 5px/mm = 50px/mV
+
+    const smallGridTime = 0.04;
+    const largeGridTime = 0.2;
+    const smallGridVoltage = 0.1;
+    const largeGridVoltage = 0.5;
+
+    const smallGridSizeX = smallGridTime * pixelsPerSecond; // 0.04s * 125px/s = 5px
+    const largeGridSizeX = largeGridTime * pixelsPerSecond; // 0.2s * 125px/s = 25px
+    const smallGridSizeY = smallGridVoltage * pixelsPerMV;  // 0.1mV * 50px/mV = 5px
+    const largeGridSizeY = largeGridVoltage * pixelsPerMV;  // 0.5mV * 50px/mV = 25px
+
+    ctx.fillStyle = '#fefefe';
+    ctx.fillRect(0, 0, rect.width, rect.height);
+
+    const actualDuration = lead1Samples.length / samplingRate;
+    let targetDuration = 10;
+    let displayDuration = targetDuration;
+
+    if (actualDuration < 10) {
+      displayDuration = actualDuration;
+    } else if (actualDuration > 10) {
+      displayDuration = 10;
+    }
+
+    const maxDisplayX = paddingLeft + displayDuration * pixelsPerSecond;
+
+    // Draw both leads
+    [lead1Samples, lead2Samples].forEach((samples, leadIndex) => {
+      const leadName = leadDisplayNames[leadIndices[leadIndex]];
+      const isFirstLead = leadIndex === 0;
+
+      // Calculate Y position for this lead
+      const leadTop = paddingTop + (isFirstLead ? 0 : leadHeight + leadSpacing);
+      const leadBottom = leadTop + leadHeight;
+      const centerY = leadTop + leadHeight / 2;
+
+      // Calculate voltage range for this lead
+      const actualMinVoltage = Math.min(...samples) / 1000; // 转换为mV
+      const actualMaxVoltage = Math.max(...samples) / 1000; // 转换为mV
+
+      let minVoltage, maxVoltage;
+      minVoltage = Math.min(-1.5, Math.floor(actualMinVoltage / 0.5) * 0.5);
+      maxVoltage = Math.max(1.5, Math.ceil(actualMaxVoltage / 0.5) * 0.5);
+
+      const voltageRange = Math.max(Math.abs(minVoltage), maxVoltage);
+      const gridPaddingFactor = 0.8;
+      const extendedPixelsPerMV = pixelsPerMV * (1 + gridPaddingFactor);
+
+      // 限制显示范围在lead区域内，避免波形超出边界
+      const minDisplayY = Math.max(leadTop, centerY - (maxVoltage * extendedPixelsPerMV));
+      const maxDisplayY = Math.min(leadBottom, centerY - (minVoltage * extendedPixelsPerMV));
+
+      // Draw grid for this lead - 使用与单lead相同的红色网格样式
+      ctx.strokeStyle = '#ff6b6b';
+      ctx.lineWidth = 0.5;
+      ctx.globalAlpha = 0.7;
+
+      // Small vertical grid lines (0.04s)
+      for (let x = paddingLeft; x <= maxDisplayX; x += smallGridSizeX) {
+        ctx.beginPath();
+        ctx.moveTo(x, leadTop);
+        ctx.lineTo(x, leadBottom);
+        ctx.stroke();
+      }
+
+      // Small horizontal grid lines (0.1mV)
+      for (let voltage = minVoltage; voltage <= maxVoltage; voltage += smallGridVoltage) {
+        const y = centerY - (voltage * extendedPixelsPerMV);
+        if (y >= leadTop && y <= leadBottom) {
+          ctx.beginPath();
+          ctx.moveTo(paddingLeft, y);
+          ctx.lineTo(maxDisplayX, y);
+          ctx.stroke();
+        }
+      }
+
+      // Large grid lines
+      ctx.strokeStyle = '#ff6b6b';
+      ctx.lineWidth = 1.2;
+      ctx.globalAlpha = 1.0;
+
+      // Large vertical grid lines (0.2s)
+      for (let x = paddingLeft; x <= maxDisplayX; x += largeGridSizeX) {
+        ctx.beginPath();
+        ctx.moveTo(x, leadTop);
+        ctx.lineTo(x, leadBottom);
+        ctx.stroke();
+      }
+
+      // Large horizontal grid lines (0.5mV)
+      for (let voltage = minVoltage; voltage <= maxVoltage; voltage += largeGridVoltage) {
+        const y = centerY - (voltage * extendedPixelsPerMV);
+        if (y >= leadTop && y <= leadBottom) {
+          ctx.beginPath();
+          ctx.moveTo(paddingLeft, y);
+          ctx.lineTo(maxDisplayX, y);
+          ctx.stroke();
+        }
+      }
+
+      ctx.globalAlpha = 1.0;
+
+      // Draw ECG waveform
+      ctx.strokeStyle = '#1a365d';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+
+      const samplesToShow = Math.min(samples.length, displayDuration * samplingRate);
+      for (let i = 0; i < samplesToShow; i++) {
+        const x = paddingLeft + (i / samplingRate) * pixelsPerSecond;
+        const voltage = samples[i] / 1000; // Convert to mV
+        const y = centerY - (voltage * extendedPixelsPerMV);
+
+        // 限制y坐标在lead区域内，避免波形超出边界
+        const clampedY = Math.max(leadTop, Math.min(leadBottom, y));
+
+        if (i === 0) {
+          ctx.moveTo(x, clampedY);
+        } else {
+          ctx.lineTo(x, clampedY);
+        }
+      }
+      ctx.stroke();
+
+      // Draw lead borders (top and bottom)
+      ctx.strokeStyle = '#ff6b6b';
+      ctx.lineWidth = 1.2;
+      ctx.globalAlpha = 1.0;
+      ctx.beginPath();
+      // Top border
+      ctx.moveTo(paddingLeft, leadTop);
+      ctx.lineTo(maxDisplayX, leadTop);
+      // Bottom border
+      ctx.moveTo(paddingLeft, leadBottom);
+      ctx.lineTo(maxDisplayX, leadBottom);
+      ctx.stroke();
+
+      // Draw lead borders (top and bottom)
+      ctx.strokeStyle = '#ff6b6b';
+      ctx.lineWidth = 1.2;
+      ctx.globalAlpha = 1.0;
+      ctx.beginPath();
+      // Top border
+      ctx.moveTo(paddingLeft, leadTop);
+      ctx.lineTo(maxDisplayX, leadTop);
+      // Bottom border
+      ctx.moveTo(paddingLeft, leadBottom);
+      ctx.lineTo(maxDisplayX, leadBottom);
+      ctx.stroke();
+
+      // Draw baseline (0mV) for this lead
+      ctx.beginPath();
+      ctx.moveTo(paddingLeft - 6, centerY);
+      ctx.lineTo(paddingLeft, centerY);
+      ctx.strokeStyle = '#ff6b6b';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Add lead label
+      ctx.font = 'bold 14px Arial, sans-serif';
+      ctx.fillStyle = '#2d3748';
+      ctx.textAlign = 'left';
+      ctx.fillText(leadName, paddingLeft + 10, leadTop + 25); // 调整位置以适应新的padding
+
+      // Add voltage scale labels for this lead
+      ctx.font = '11px Arial, sans-serif';
+      ctx.fillStyle = '#718096';
+      ctx.textAlign = 'right';
+
+      // Y-axis voltage labels
+      for (let voltage = minVoltage; voltage <= maxVoltage; voltage += 0.5) {
+        const y = centerY - (voltage * extendedPixelsPerMV);
+        if (y >= leadTop && y <= leadBottom) {
+          ctx.fillText(`${voltage.toFixed(1)}`, paddingLeft - 10, y + 4);
+        }
+      }
+    });
+
+    // Add time labels (shared for both leads) - 显示在最后一个lead下方
+    ctx.font = '11px Arial, sans-serif';
+    ctx.fillStyle = '#718096';
+    ctx.textAlign = 'center';
+
+    // 计算最后一个lead的底部位置
+    const lastLeadBottom = paddingTop + leadHeight + leadSpacing + leadHeight; // 第二个lead的底部
+    const timeLabelsY = lastLeadBottom + 20; // 在最后一个lead下方20px处显示时间标签
+
+    for (let time = 0; time <= displayDuration; time += 0.2) {
+      const x = paddingLeft + time * pixelsPerSecond;
+      if (x <= maxDisplayX) {
+        ctx.fillText(time.toFixed(1), x, timeLabelsY);
+      }
+    }
+
+    // Add axis labels
+    ctx.font = 'bold 13px Arial, sans-serif';
+    ctx.fillStyle = '#2d3748';
+
+    // Y-axis label (voltage) - centered between leads
+    ctx.save();
+    ctx.translate(35, paddingTop + contentHeight / 2); // 调整位置以适应新的padding
+    ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center';
+    ctx.fillText('Amplitude (mV)', 0, 0);
+    ctx.restore();
+
+    // X-axis label (time) - 显示在时间标签下方
+    ctx.textAlign = 'center';
+    ctx.fillText('Time (s)', paddingLeft + contentWidth / 2, timeLabelsY + 15);
+
+  }, [waveformData, samplingRate, leadNames, mmPerSecond, mmPerMV]);
+
+  // Professional ECG with Lead II reference - 始终在底部显示Lead II作为参考
+  const drawSingleLeadWithReference = React.useCallback((canvasId, leadIndex, waveformDataToUse = null) => {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) {
+      return;
+    }
+
+    if (canvas.tagName !== 'CANVAS') {
+      return;
+    }
+
+    const dataToUse = waveformDataToUse || waveformData;
+    if (!dataToUse || !dataToUse[leadIndex] || !dataToUse[1]) { // Lead II is index 1
+      return;
+    }
+
+    const selectedLeadSamples = dataToUse[leadIndex];
+    const lead2Samples = dataToUse[1]; // Lead II as reference
+
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.getBoundingClientRect();
+
+    // 🔥 Three-section layout: selected lead + Lead II reference
+    const paddingLeft = 100;
+    const paddingBottom = 80;
+    const paddingTop = 60;
+    const paddingRight = 50;
+    const leadSpacing = 20; // Space between leads
+
+    const contentWidth = rect.width - paddingLeft - paddingRight;
+    const contentHeight = rect.height - paddingTop - paddingBottom;
+    const totalLeads = 2; // Selected lead + Lead II reference
+    const minLeadHeight = 120; // Minimum height per lead
+    const availableHeight = contentHeight - leadSpacing;
+    const calculatedLeadHeight = availableHeight / totalLeads;
+    const leadHeight = Math.max(minLeadHeight, calculatedLeadHeight); // Ensure minimum height
+
+    canvas.width = rect.width * window.devicePixelRatio;
+    canvas.height = rect.height * window.devicePixelRatio;
+    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+
+    const pixelsPerMM = 5;
+    const pixelsPerSecond = mmPerSecond * pixelsPerMM;
+    const pixelsPerMV = mmPerMV * pixelsPerMM;
+
+    const smallGridTime = 0.04;
+    const largeGridTime = 0.2;
+    const smallGridVoltage = 0.1;
+    const largeGridVoltage = 0.5;
+
+    const smallGridSizeX = smallGridTime * pixelsPerSecond;
+    const largeGridSizeX = largeGridTime * pixelsPerSecond;
+    const smallGridSizeY = smallGridVoltage * pixelsPerMV;
+    const largeGridSizeY = largeGridVoltage * pixelsPerMV;
+
+    ctx.fillStyle = '#fefefe';
+    ctx.fillRect(0, 0, rect.width, rect.height);
+
+    const actualDuration = selectedLeadSamples.length / samplingRate;
+    let targetDuration = 10;
+    let displayDuration = targetDuration;
+
+    if (actualDuration < 10) {
+      displayDuration = actualDuration;
+    } else if (actualDuration > 10) {
+      displayDuration = 10;
+    }
+
+    const maxDisplayX = paddingLeft + displayDuration * pixelsPerSecond;
+
+    // Draw both leads: selected lead on top, Lead II reference at bottom
+    const leads = [
+      { samples: selectedLeadSamples, name: leadNames[leadIndex] || `Lead ${leadIndex + 1}`, isReference: false },
+      { samples: lead2Samples, name: 'Lead II (Reference)', isReference: true }
+    ];
+
+    leads.forEach((lead, leadIndex) => {
+      const samples = lead.samples;
+      const leadName = lead.name;
+      const isFirstLead = leadIndex === 0;
+      const isReference = lead.isReference;
+
+      // Calculate Y position for this lead
+      const leadTop = paddingTop + (isFirstLead ? 0 : leadHeight + leadSpacing);
+      const leadBottom = leadTop + leadHeight;
+      const centerY = leadTop + leadHeight / 2;
+
+      // Calculate voltage range for this lead
+      const actualMinVoltage = Math.min(...samples) / 1000;
+      const actualMaxVoltage = Math.max(...samples) / 1000;
+
+      let minVoltage, maxVoltage;
+      minVoltage = Math.min(-1.5, Math.floor(actualMinVoltage / 0.5) * 0.5);
+      maxVoltage = Math.max(1.5, Math.ceil(actualMaxVoltage / 0.5) * 0.5);
+
+      const voltageRange = Math.max(Math.abs(minVoltage), maxVoltage);
+      const gridPaddingFactor = 0.8;
+      const extendedPixelsPerMV = pixelsPerMV * (1 + gridPaddingFactor);
+
+      // 限制显示范围在lead区域内
+      const minDisplayY = Math.max(leadTop, centerY - (maxVoltage * extendedPixelsPerMV));
+      const maxDisplayY = Math.min(leadBottom, centerY - (minVoltage * extendedPixelsPerMV));
+
+      // Draw grid for this lead
+      ctx.strokeStyle = '#ff6b6b';
+      ctx.lineWidth = 0.5;
+      ctx.globalAlpha = 0.7;
+
+      // Small vertical grid lines
+      for (let x = paddingLeft; x <= maxDisplayX; x += smallGridSizeX) {
+        ctx.beginPath();
+        ctx.moveTo(x, leadTop);
+        ctx.lineTo(x, leadBottom);
+        ctx.stroke();
+      }
+
+      // Small horizontal grid lines
+      for (let voltage = minVoltage; voltage <= maxVoltage; voltage += smallGridVoltage) {
+        const y = centerY - (voltage * extendedPixelsPerMV);
+        if (y >= leadTop && y <= leadBottom) {
+          ctx.beginPath();
+          ctx.moveTo(paddingLeft, y);
+          ctx.lineTo(maxDisplayX, y);
+          ctx.stroke();
+        }
+      }
+
+      // Large grid lines
+      ctx.strokeStyle = '#ff6b6b';
+      ctx.lineWidth = 1.2;
+      ctx.globalAlpha = 1.0;
+
+      // Large vertical grid lines
+      for (let x = paddingLeft; x <= maxDisplayX; x += largeGridSizeX) {
+        ctx.beginPath();
+        ctx.moveTo(x, leadTop);
+        ctx.lineTo(x, leadBottom);
+        ctx.stroke();
+      }
+
+      // Large horizontal grid lines
+      for (let voltage = minVoltage; voltage <= maxVoltage; voltage += largeGridVoltage) {
+        const y = centerY - (voltage * extendedPixelsPerMV);
+        if (y >= leadTop && y <= leadBottom) {
+          ctx.beginPath();
+          ctx.moveTo(paddingLeft, y);
+          ctx.lineTo(maxDisplayX, y);
+          ctx.stroke();
+        }
+      }
+
+      ctx.globalAlpha = 1.0;
+
+      // Draw ECG waveform
+      ctx.strokeStyle = '#1a365d'; // All leads use same color
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+
+      const samplesToShow = Math.min(samples.length, displayDuration * samplingRate);
+      for (let i = 0; i < samplesToShow; i++) {
+        const x = paddingLeft + (i / samplingRate) * pixelsPerSecond;
+        const voltage = samples[i] / 1000;
+        const y = centerY - (voltage * extendedPixelsPerMV);
+
+        const clampedY = Math.max(leadTop, Math.min(leadBottom, y));
+
+        if (i === 0) {
+          ctx.moveTo(x, clampedY);
+        } else {
+          ctx.lineTo(x, clampedY);
+        }
+      }
+      ctx.stroke();
+
+      // Draw lead borders (top and bottom)
+      ctx.strokeStyle = '#ff6b6b';
+      ctx.lineWidth = 1.2;
+      ctx.globalAlpha = 1.0;
+      ctx.beginPath();
+      // Top border
+      ctx.moveTo(paddingLeft, leadTop);
+      ctx.lineTo(maxDisplayX, leadTop);
+      // Bottom border
+      ctx.moveTo(paddingLeft, leadBottom);
+      ctx.lineTo(maxDisplayX, leadBottom);
+      ctx.stroke();
+
+      // Draw baseline (0mV) for this lead
+      ctx.beginPath();
+      ctx.moveTo(paddingLeft - 6, centerY);
+      ctx.lineTo(paddingLeft, centerY);
+      ctx.strokeStyle = '#ff6b6b';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Add lead label
+      ctx.font = 'bold 14px Arial, sans-serif';
+      ctx.fillStyle = isReference ? '#ff6b6b' : '#2d3748';
+      ctx.textAlign = 'left';
+      ctx.fillText(leadName, paddingLeft + 10, leadTop + 25);
+
+      // Add voltage scale labels for this lead
+      ctx.font = '11px Arial, sans-serif';
+      ctx.fillStyle = '#718096';
+      ctx.textAlign = 'right';
+
+      for (let voltage = minVoltage; voltage <= maxVoltage; voltage += 0.5) {
+        const y = centerY - (voltage * extendedPixelsPerMV);
+        if (y >= leadTop && y <= leadBottom) {
+          ctx.fillText(`${voltage.toFixed(1)}`, paddingLeft - 10, y + 4);
+        }
+      }
+    });
+
+    // Add time labels (shared for both leads) - 显示在Lead II Reference下方
+    ctx.font = '11px Arial, sans-serif';
+    ctx.fillStyle = '#718096';
+    ctx.textAlign = 'center';
+
+    // 计算Lead II Reference的底部位置（第二个lead）
+    const lead2ReferenceBottom = paddingTop + leadHeight + leadSpacing + leadHeight; // Lead II Reference的底部
+    const timeLabelsY = lead2ReferenceBottom + 20; // 在Lead II Reference下方20px处显示时间标签
+
+    for (let time = 0; time <= displayDuration; time += 0.2) {
+      const x = paddingLeft + time * pixelsPerSecond;
+      if (x <= maxDisplayX) {
+        ctx.fillText(time.toFixed(1), x, timeLabelsY);
+      }
+    }
+
+    // Add axis labels
+    ctx.font = 'bold 13px Arial, sans-serif';
+    ctx.fillStyle = '#2d3748';
+
+    // Y-axis label (voltage) - centered between leads
+    ctx.save();
+    ctx.translate(35, paddingTop + contentHeight / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center';
+    ctx.fillText('Amplitude (mV)', 0, 0);
+    ctx.restore();
+
+    // X-axis label (time) - 显示在时间标签下方
+    ctx.textAlign = 'center';
+    ctx.fillText('Time (s)', paddingLeft + contentWidth / 2, timeLabelsY + 15);
+
+  }, [waveformData, samplingRate, leadNames, mmPerSecond, mmPerMV]);
+
+  // Professional ECG dual leads with Lead II reference - 始终在底部显示Lead II作为参考
+  const drawDualLeadsWithReference = React.useCallback((canvasId, leadIndices, waveformDataToUse = null) => {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) {
+      return;
+    }
+
+    if (canvas.tagName !== 'CANVAS') {
+      return;
+    }
+
+    const dataToUse = waveformDataToUse || waveformData;
+    if (!dataToUse || leadIndices.length < 2 || !dataToUse[leadIndices[0]] || !dataToUse[leadIndices[1]] || !dataToUse[1]) {
+      return;
+    }
+
+    const leadDisplayNames = ['Lead I', 'Lead II', 'Lead III', 'aVR', 'aVL', 'aVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6'];
+    const lead1Samples = dataToUse[leadIndices[0]];
+    const lead2Samples = dataToUse[leadIndices[1]];
+    const lead2ReferenceSamples = dataToUse[1]; // Lead II as reference
+
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.getBoundingClientRect();
+
+    // 🔥 Three-section layout: two selected leads + Lead II reference
+    const paddingLeft = 100;
+    const paddingBottom = 80;
+    const paddingTop = 60;
+    const paddingRight = 50;
+    const leadSpacing = 20; // Space between leads
+
+    const contentWidth = rect.width - paddingLeft - paddingRight;
+    const contentHeight = rect.height - paddingTop - paddingBottom;
+    const totalLeads = 3; // Two selected leads + Lead II reference
+    const minLeadHeight = 120; // Minimum height per lead
+    const availableHeight = contentHeight - leadSpacing * (totalLeads - 1);
+    const calculatedLeadHeight = availableHeight / totalLeads;
+    const leadHeight = Math.max(minLeadHeight, calculatedLeadHeight); // Ensure minimum height
+
+    canvas.width = rect.width * window.devicePixelRatio;
+    canvas.height = rect.height * window.devicePixelRatio;
+    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+
+    const pixelsPerMM = 5;
+    const pixelsPerSecond = mmPerSecond * pixelsPerMM;
+    const pixelsPerMV = mmPerMV * pixelsPerMM;
+
+    const smallGridTime = 0.04;
+    const largeGridTime = 0.2;
+    const smallGridVoltage = 0.1;
+    const largeGridVoltage = 0.5;
+
+    const smallGridSizeX = smallGridTime * pixelsPerSecond;
+    const largeGridSizeX = largeGridTime * pixelsPerSecond;
+    const smallGridSizeY = smallGridVoltage * pixelsPerMV;
+    const largeGridSizeY = largeGridVoltage * pixelsPerMV;
+
+    ctx.fillStyle = '#fefefe';
+    ctx.fillRect(0, 0, rect.width, rect.height);
+
+    const actualDuration = lead1Samples.length / samplingRate;
+    let targetDuration = 10;
+    let displayDuration = targetDuration;
+
+    if (actualDuration < 10) {
+      displayDuration = actualDuration;
+    } else if (actualDuration > 10) {
+      displayDuration = 10;
+    }
+
+    const maxDisplayX = paddingLeft + displayDuration * pixelsPerSecond;
+
+    // Draw three leads: two selected leads + Lead II reference at bottom
+    const leads = [
+      { samples: lead1Samples, name: leadDisplayNames[leadIndices[0]], isReference: false },
+      { samples: lead2Samples, name: leadDisplayNames[leadIndices[1]], isReference: false },
+      { samples: lead2ReferenceSamples, name: 'Lead II (Reference)', isReference: true }
+    ];
+
+    leads.forEach((lead, leadIndex) => {
+      const samples = lead.samples;
+      const leadName = lead.name;
+      const isReference = lead.isReference;
+
+      // Calculate Y position for this lead
+      const leadTop = paddingTop + leadIndex * (leadHeight + leadSpacing);
+      const leadBottom = leadTop + leadHeight;
+      const centerY = leadTop + leadHeight / 2;
+
+      // Calculate voltage range for this lead
+      const actualMinVoltage = Math.min(...samples) / 1000;
+      const actualMaxVoltage = Math.max(...samples) / 1000;
+
+      let minVoltage, maxVoltage;
+      minVoltage = Math.min(-1.5, Math.floor(actualMinVoltage / 0.5) * 0.5);
+      maxVoltage = Math.max(1.5, Math.ceil(actualMaxVoltage / 0.5) * 0.5);
+
+      const voltageRange = Math.max(Math.abs(minVoltage), maxVoltage);
+      const gridPaddingFactor = 0.8;
+      const extendedPixelsPerMV = pixelsPerMV * (1 + gridPaddingFactor);
+
+      // 限制显示范围在lead区域内
+      const minDisplayY = Math.max(leadTop, centerY - (maxVoltage * extendedPixelsPerMV));
+      const maxDisplayY = Math.min(leadBottom, centerY - (minVoltage * extendedPixelsPerMV));
+
+      // Draw grid for this lead
+      ctx.strokeStyle = '#ff6b6b';
+      ctx.lineWidth = 0.5;
+      ctx.globalAlpha = 0.7;
+
+      // Small vertical grid lines
+      for (let x = paddingLeft; x <= maxDisplayX; x += smallGridSizeX) {
+        ctx.beginPath();
+        ctx.moveTo(x, leadTop);
+        ctx.lineTo(x, leadBottom);
+        ctx.stroke();
+      }
+
+      // Small horizontal grid lines
+      for (let voltage = minVoltage; voltage <= maxVoltage; voltage += smallGridVoltage) {
+        const y = centerY - (voltage * extendedPixelsPerMV);
+        if (y >= leadTop && y <= leadBottom) {
+          ctx.beginPath();
+          ctx.moveTo(paddingLeft, y);
+          ctx.lineTo(maxDisplayX, y);
+          ctx.stroke();
+        }
+      }
+
+      // Large grid lines
+      ctx.strokeStyle = '#ff6b6b';
+      ctx.lineWidth = 1.2;
+      ctx.globalAlpha = 1.0;
+
+      // Large vertical grid lines
+      for (let x = paddingLeft; x <= maxDisplayX; x += largeGridSizeX) {
+        ctx.beginPath();
+        ctx.moveTo(x, leadTop);
+        ctx.lineTo(x, leadBottom);
+        ctx.stroke();
+      }
+
+      // Large horizontal grid lines
+      for (let voltage = minVoltage; voltage <= maxVoltage; voltage += largeGridVoltage) {
+        const y = centerY - (voltage * extendedPixelsPerMV);
+        if (y >= leadTop && y <= leadBottom) {
+          ctx.beginPath();
+          ctx.moveTo(paddingLeft, y);
+          ctx.lineTo(maxDisplayX, y);
+          ctx.stroke();
+        }
+      }
+
+      ctx.globalAlpha = 1.0;
+
+      // Draw ECG waveform
+      ctx.strokeStyle = '#1a365d'; // All leads use same color
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+
+      const samplesToShow = Math.min(samples.length, displayDuration * samplingRate);
+      for (let i = 0; i < samplesToShow; i++) {
+        const x = paddingLeft + (i / samplingRate) * pixelsPerSecond;
+        const voltage = samples[i] / 1000;
+        const y = centerY - (voltage * extendedPixelsPerMV);
+
+        const clampedY = Math.max(leadTop, Math.min(leadBottom, y));
+
+        if (i === 0) {
+          ctx.moveTo(x, clampedY);
+        } else {
+          ctx.lineTo(x, clampedY);
+        }
+      }
+      ctx.stroke();
+
+      // Draw lead borders (top and bottom)
+      ctx.strokeStyle = '#ff6b6b';
+      ctx.lineWidth = 1.2;
+      ctx.globalAlpha = 1.0;
+      ctx.beginPath();
+      // Top border
+      ctx.moveTo(paddingLeft, leadTop);
+      ctx.lineTo(maxDisplayX, leadTop);
+      // Bottom border
+      ctx.moveTo(paddingLeft, leadBottom);
+      ctx.lineTo(maxDisplayX, leadBottom);
+      ctx.stroke();
+
+      // Draw baseline (0mV) for this lead
+      ctx.beginPath();
+      ctx.moveTo(paddingLeft - 6, centerY);
+      ctx.lineTo(paddingLeft, centerY);
+      ctx.strokeStyle = '#ff6b6b';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Add lead label
+      ctx.font = 'bold 14px Arial, sans-serif';
+      ctx.fillStyle = isReference ? '#ff6b6b' : '#2d3748';
+      ctx.textAlign = 'left';
+      ctx.fillText(leadName, paddingLeft + 10, leadTop + 25);
+
+      // Add voltage scale labels for this lead
+      ctx.font = '11px Arial, sans-serif';
+      ctx.fillStyle = '#718096';
+      ctx.textAlign = 'right';
+
+      for (let voltage = minVoltage; voltage <= maxVoltage; voltage += 0.5) {
+        const y = centerY - (voltage * extendedPixelsPerMV);
+        if (y >= leadTop && y <= leadBottom) {
+          ctx.fillText(`${voltage.toFixed(1)}`, paddingLeft - 10, y + 4);
+        }
+      }
+    });
+
+    // Add time labels (shared for all leads) - 显示在最后一个lead下方
+    ctx.font = '11px Arial, sans-serif';
+    ctx.fillStyle = '#718096';
+    ctx.textAlign = 'center';
+
+    // 计算最后一个lead（Lead II Reference）的底部位置
+    const lastLeadBottom = paddingTop + 2 * (leadHeight + leadSpacing) + leadHeight; // 第三个lead（Lead II Reference）的底部
+    const timeLabelsY = lastLeadBottom + 20; // 在最后一个lead下方20px处显示时间标签
+
+    for (let time = 0; time <= displayDuration; time += 0.2) {
+      const x = paddingLeft + time * pixelsPerSecond;
+      if (x <= maxDisplayX) {
+        ctx.fillText(time.toFixed(1), x, timeLabelsY);
+      }
+    }
+
+    // Add axis labels
+    ctx.font = 'bold 13px Arial, sans-serif';
+    ctx.fillStyle = '#2d3748';
+
+    // Y-axis label (voltage) - centered between all leads
+    ctx.save();
+    ctx.translate(35, paddingTop + contentHeight / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center';
+    ctx.fillText('Amplitude (mV)', 0, 0);
+    ctx.restore();
+
+    // X-axis label (time) - 显示在时间标签下方
+    ctx.textAlign = 'center';
+    ctx.fillText('Time (s)', paddingLeft + contentWidth / 2, timeLabelsY + 15);
+
+  }, [waveformData, samplingRate, leadNames, mmPerSecond, mmPerMV]);
+
   // Function to load DICOM file - optimized with useCallback
   const loadDicomFile = React.useCallback(async (arrayBuffer, event) => {
     try {
@@ -603,7 +1401,26 @@ const ECGViewer = () => {
       const canvasId = 'ecg-canvas-' + Date.now();
       canvas.id = canvasId;
       canvas.style.width = '100%';
-      canvas.style.height = '100%';
+
+      // Adjust height based on lead selection - dynamic calculation
+      if (isMultipleMode) {
+        canvas.style.height = '100%'; // Full height for multiple leads
+      } else {
+        // Calculate height based on number of leads (selected + Lead II reference)
+        const totalLeads = selectedLeads.length + 1; // +1 for Lead II reference
+        const baseHeight = 200; // Base height for padding and labels
+        const minLeadHeight = 120; // Minimum height per lead
+        const leadSpacing = 20; // Spacing between leads
+        const calculatedHeight = baseHeight + (totalLeads * minLeadHeight) + ((totalLeads - 1) * leadSpacing);
+
+        // Set minimum and maximum heights with better scaling
+        const minHeight = 400;
+        const maxHeight = Math.min(1200, window.innerHeight * 0.8); // Max 80% of viewport height
+        const finalHeight = Math.max(minHeight, Math.min(maxHeight, calculatedHeight));
+
+        canvas.style.height = `${finalHeight}px`;
+      }
+
       canvas.style.border = '1px solid #e9ecef';
       canvas.style.borderRadius = '8px';
       canvas.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
@@ -611,11 +1428,11 @@ const ECGViewer = () => {
       container.appendChild(canvas);
       setCurrentCanvasId(canvasId); // Save canvas ID to state
 
-      const leadIndex = selectedLead === "multiple" ? 0 : parseInt(selectedLead); // ⭐ New addition
+      const leadIndex = isMultipleMode ? 0 : (selectedLeads.length > 0 ? selectedLeads[0] : 0); // ⭐ Updated logic
       const leadDisplayNames = ['Lead I', 'Lead II', 'Lead III', 'aVR', 'aVL', 'aVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6'];
-      const nameView = selectedLead === "multiple" ? '' : (leadDisplayNames[leadIndex] || '');
+      const nameView = isMultipleMode ? '' : (leadDisplayNames[leadIndex] || '');
 
-      if (selectedLead === "multiple") {
+      if (isMultipleMode) {
         // Multiple mode: use DicomECGViewer
         const viewer = new DicomECGViewer(arrayBuffer, canvasId, 0);
         viewerRef.current = viewer;
@@ -659,7 +1476,7 @@ const ECGViewer = () => {
     } catch (error) {
       setError(`Failed to load ECG: ${error.message}`);
     }
-  }, [selectedLead, setError]);
+  }, [isMultipleMode, selectedLeads, setError]);
 
   React.useEffect(() => {
     const loadInstanceFromOrthanc = async () => {
@@ -724,20 +1541,26 @@ const ECGViewer = () => {
     if (dicomArrayBuffer) {
       loadDicomFile(dicomArrayBuffer);
     }
-  }, [selectedLead, dicomArrayBuffer, loadDicomFile]);
+  }, [isMultipleMode, selectedLeads, dicomArrayBuffer, loadDicomFile]);
 
-  // Redraw when waveformData updates and selectedLead is in single mode
+  // Redraw when waveformData updates and not in multiple mode
   React.useEffect(() => {
-    if (waveformData && selectedLead !== "multiple" && selectedLead !== null && currentCanvasId) {
-      const leadIndex = parseInt(selectedLead);
-      if (!isNaN(leadIndex)) {
-        // Use setTimeout to ensure DOM is updated
-        setTimeout(() => {
-          drawSingleLead(currentCanvasId, leadIndex, waveformData);
-        }, 100);
-      }
+    if (waveformData && !isMultipleMode && selectedLeads.length > 0 && currentCanvasId) {
+      // Use setTimeout to ensure DOM is updated
+      setTimeout(() => {
+        if (selectedLeads.length === 1) {
+          // Single lead display with Lead II reference
+          const leadIndex = selectedLeads[0];
+          if (!isNaN(leadIndex)) {
+            drawSingleLeadWithReference(currentCanvasId, leadIndex, waveformData);
+          }
+        } else if (selectedLeads.length === 2) {
+          // Dual lead display with Lead II reference
+          drawDualLeadsWithReference(currentCanvasId, selectedLeads, waveformData);
+        }
+      }, 100);
     }
-  }, [waveformData, selectedLead, currentCanvasId, drawSingleLead]);
+  }, [waveformData, isMultipleMode, selectedLeads, currentCanvasId, drawSingleLeadWithReference, drawDualLeadsWithReference]);
 
 
 
@@ -851,28 +1674,53 @@ const ECGViewer = () => {
     >
       <Space direction="vertical" style={{ width: '100%' }} size="large">
 
-        {/* ⭐ New addition: Lead selector */}
+        {/* ⭐ New addition: Lead selector with checkbox mode */}
         <div>
-          <span style={{ marginRight: 8 }}>Select Lead:</span>
-          <Select
-            value={selectedLead}
-            style={{ width: 200 }}
-            onChange={setSelectedLead}
-          >
-            <Option value="multiple">Multiple (12 leads)</Option>
-            <Option value="0">Lead I</Option>
-            <Option value="1">Lead II</Option>
-            <Option value="2">Lead III</Option>
-            <Option value="3">aVR</Option>
-            <Option value="4">aVL</Option>
-            <Option value="5">aVF</Option>
-            <Option value="6">V1</Option>
-            <Option value="7">V2</Option>
-            <Option value="8">V3</Option>
-            <Option value="9">V4</Option>
-            <Option value="10">V5</Option>
-            <Option value="11">V6</Option>
-          </Select>
+          <div style={{ marginBottom: 12 }}>
+            <Checkbox
+              checked={isMultipleMode}
+              onChange={(e) => handleMultipleModeChange(e.target.checked)}
+            >
+              Multiple (12 leads)
+            </Checkbox>
+          </div>
+
+          {!isMultipleMode && (
+            <div>
+              <span style={{ marginRight: 8, fontSize: '14px', color: '#666' }}>
+                Select up to 2 leads ({selectedLeads.length}/2):
+              </span>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '8px' }}>
+                {[
+                  { index: 0, name: 'Lead I' },
+                  { index: 1, name: 'Lead II' },
+                  { index: 2, name: 'Lead III' },
+                  { index: 3, name: 'aVR' },
+                  { index: 4, name: 'aVL' },
+                  { index: 5, name: 'aVF' },
+                  { index: 6, name: 'V1' },
+                  { index: 7, name: 'V2' },
+                  { index: 8, name: 'V3' },
+                  { index: 9, name: 'V4' },
+                  { index: 10, name: 'V5' },
+                  { index: 11, name: 'V6' }
+                ].map(({ index, name }) => (
+                  <Checkbox
+                    key={index}
+                    checked={selectedLeads.includes(index)}
+                    disabled={!selectedLeads.includes(index) && selectedLeads.length >= 2}
+                    onChange={(e) => handleSingleLeadChange(index, e.target.checked)}
+                    style={{
+                      margin: 0,
+                      opacity: !selectedLeads.includes(index) && selectedLeads.length >= 2 ? 0.5 : 1
+                    }}
+                  >
+                    {name}
+                  </Checkbox>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Weasis-like parameter controls */}
