@@ -1,0 +1,22 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../web"
+		},
+		{
+			"path": "../AIagent"
+		},
+		{
+			"path": "../AIClinic-Engine"
+		},
+		{
+			"path": "../AIClinic-server"
+		},
+		{
+			"path": "../AIClinic-webserver"
+		}
+	]
+}

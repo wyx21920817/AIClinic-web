@@ -13,7 +13,6 @@ import {
   Checkbox,
   Divider,
   Alert,
-  Tooltip,
   Row,
   Col
 } from 'antd';
@@ -22,15 +21,13 @@ import {
   DownloadOutlined,
   PrinterOutlined,
   EyeOutlined,
-  SettingOutlined,
-  CheckCircleOutlined,
-  LoadingOutlined
+  SettingOutlined
 } from '@ant-design/icons';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import { saveAs } from 'file-saver';
+// import { saveAs } from 'file-saver';
 
-const { Title, Text, Paragraph } = Typography;
+const { Text } = Typography;
 const { Option } = Select;
 const { TextArea } = Input;
 
@@ -63,7 +60,7 @@ const PDFReportExport = ({
     customNotes: ''
   };
 
-  const [settings, setSettings] = useState({ ...defaultSettings, ...reportSettings });
+  const [settings] = useState({ ...defaultSettings, ...reportSettings });
 
   const generatePDF = async () => {
     setIsGenerating(true);
@@ -204,7 +201,7 @@ const PDFReportExport = ({
         setProgress(70);
       }
 
-      // Add doctor feedback
+      // Add doctor feedback (timestamp, label, then text)
       if (settings.includeDoctorFeedback && doctorFeedback) {
         if (yPosition > pageHeight - 100) {
           pdf.addPage();
@@ -213,26 +210,28 @@ const PDFReportExport = ({
         
         pdf.setFontSize(14);
         pdf.setFont('helvetica', 'bold');
-        pdf.text('Doctor Feedback', margin, yPosition);
+        pdf.text('Doctor feedback:', margin, yPosition);
         yPosition += 10;
         
         pdf.setFontSize(10);
         pdf.setFont('helvetica', 'normal');
-        pdf.text(`Status: ${doctorFeedback.approved ? 'Approved' : 'Corrected'}`, margin, yPosition);
-        yPosition += 5;
-        
-        if (doctorFeedback.confidence > 0) {
-          pdf.text(`Doctor Confidence: ${doctorFeedback.confidence}/5`, margin, yPosition);
+        const tsDate = doctorFeedback.timestamp ? new Date(doctorFeedback.timestamp) : new Date();
+        pdf.text(`Time: ${tsDate.toLocaleString()}` , margin, yPosition);
+        // Add an extra spacer line to make it less congested
+        yPosition += 12;
+
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('Doctor Feedback', margin, yPosition);
+        yPosition += 10;
+
+        pdf.setFont('helvetica', 'normal');
+        const notesText = (doctorFeedback.notes || doctorFeedback.comment || '').trim();
+        const words = notesText.split(' ');
+        let line = '';
+        if (!notesText) {
+          pdf.text('No notes provided.', margin, yPosition);
           yPosition += 5;
-        }
-        
-        if (doctorFeedback.comment) {
-          pdf.text('Comments:', margin, yPosition);
-          yPosition += 5;
-          
-          // Split long comments into multiple lines
-          const words = doctorFeedback.comment.split(' ');
-          let line = '';
+        } else {
           for (const word of words) {
             const testLine = line + word + ' ';
             if (pdf.getTextWidth(testLine) > pageWidth - 2 * margin) {
@@ -248,6 +247,8 @@ const PDFReportExport = ({
             yPosition += 5;
           }
         }
+        // Extra spacing after section
+        yPosition += 5;
         
         yPosition += 10;
         setProgress(80);
@@ -523,8 +524,9 @@ const PDFReportExport = ({
               {settings.includeDoctorFeedback && doctorFeedback && (
                 <div>
                   <h2>Doctor Feedback</h2>
-                  <p><strong>Status:</strong> {doctorFeedback.approved ? 'Approved' : 'Corrected'}</p>
-                  <p><strong>Comments:</strong> {doctorFeedback.comment}</p>
+                  <p><strong>Time:</strong> {new Date(doctorFeedback.timestamp || Date.now()).toLocaleString()}</p>
+                  <p><strong>Doctor feedback:</strong></p>
+                  <p>{(doctorFeedback.notes || doctorFeedback.comment || '').trim() || 'No notes provided.'}</p>
                 </div>
               )}
             </div>

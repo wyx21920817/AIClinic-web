@@ -63,12 +63,16 @@ export const ecgAPI = {
   },
 
   // Update ECG file metadata
-  updateECGFile: async (userId, instanceId, notes, tags, approvedStatus = false) => {
+  updateECGFile: async (userId, instanceId, notes, tags, approvedStatus) => {
     try {
       const formData = new URLSearchParams();
       formData.append('notes', notes);
-      formData.append('tags', tags);
-      formData.append('approved_status', approvedStatus);
+      if (tags !== undefined && tags !== null && `${tags}`.length > 0) {
+        formData.append('tags', tags);
+      }
+      if (approvedStatus !== undefined && approvedStatus !== null) {
+        formData.append('approved_status', approvedStatus);
+      }
 
       const response = await request.put(
         `${API_ENDPOINTS.ECG}/${userId}/files/${instanceId}`,
@@ -230,7 +234,9 @@ export const aiDiagnosisAPI = {
       });
       
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        let detail = '';
+        try { detail = await response.text(); } catch (_) {}
+        throw new Error(`Server error (${response.status}). ${detail || 'Please try again later.'}`);
       }
       
       const data = await response.json();
@@ -262,7 +268,9 @@ export const aiDiagnosisAPI = {
       });
       
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        let detail = '';
+        try { detail = await response.text(); } catch (_) {}
+        throw new Error(`Server error (${response.status}). ${detail || 'Please try again later.'}`);
       }
       
       const data = await response.json();
@@ -298,7 +306,9 @@ export const aiDiagnosisAPI = {
       });
       
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        let detail = '';
+        try { detail = await response.text(); } catch (_) {}
+        throw new Error(`Server error (${response.status}). ${detail || 'Please try again later.'}`);
       }
       
       const data = await response.json();
@@ -356,7 +366,9 @@ export const aiDiagnosisAPI = {
       });
       
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        let detail = '';
+        try { detail = await response.text(); } catch (_) {}
+        throw new Error(`Server error (${response.status}). ${detail || 'Please try again later.'}`);
       }
       
       const data = await response.json();
@@ -417,7 +429,7 @@ export const handleAuthError = (error) => {
   throw error;
 };
 
-export default {
+const apiExports = {
   ecgAPI,
   feedbackAPI,
   pdfAPI,
@@ -426,3 +438,5 @@ export default {
   handleCORSError,
   handleAuthError
 };
+
+export default apiExports;
