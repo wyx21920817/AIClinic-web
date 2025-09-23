@@ -88,13 +88,15 @@ const ECGViewer = () => {
 
   const [selectedLead, setSelectedLead] = React.useState("multiple"); // ⭐ Keep for backward compatibility
   const [selectedLeads, setSelectedLeads] = React.useState([]); // ⭐ New: Array of selected lead indices
-  const [isMultipleMode, setIsMultipleMode] = React.useState(true); // ⭐ New: Track if in multiple mode
+  const [isMultipleMode, setIsMultipleMode] = React.useState(false); // Default to single-lead mode
   const [dicomArrayBuffer, setDicomArrayBuffer] = React.useState(null); // Store DICOM data
   const [waveformData, setWaveformData] = React.useState(null); // 2D array: [lead][samples]
-  const [samplingRate, setSamplingRate] = React.useState(500);
+  const [samplingRate, setSamplingRate] = React.useState(100);
   const [leadNames, setLeadNames] = React.useState([]);
   const [currentCanvasId, setCurrentCanvasId] = React.useState(null); // Store current canvas ID
   const [selectedDiseasesXAI, setSelectedDiseasesXAI] = React.useState([]);
+
+  // Multiple-leads viewing temporarily disabled; single-lead remains enabled
 
   // Lead selection handlers
   const handleMultipleModeChange = (checked) => {
@@ -297,7 +299,7 @@ const ECGViewer = () => {
     return allLeads;
   }, []);
 
-  // Professional ECG single lead rendering - reference MedDream style
+  // Single-lead ECG rendering
 
   const drawSingleLead = React.useCallback((canvasId, leadIndex, waveformDataToUse = null) => {
     const canvas = document.getElementById(canvasId);
@@ -319,11 +321,11 @@ const ECGViewer = () => {
     const ctx = canvas.getContext('2d');
     const rect = canvas.getBoundingClientRect();
 
-    // 🔥 Weasis标准布局参数 - 优化padding以确保所有信息完全显示
-    const paddingLeft = 100;  // 增加左侧空间以容纳Y轴标签和电压标尺
-    const paddingBottom = 80; // 增加底部空间以容纳时间轴标签
-    const paddingTop = 60;    // 增加顶部空间以容纳lead标签
-    const paddingRight = 50;  // 增加右侧空间以防止内容被截断
+    // Layout paddings so axes, labels and waveform are fully visible
+    const paddingLeft = 100;
+    const paddingBottom = 80;
+    const paddingTop = 60;
+    const paddingRight = 50;
 
     const contentWidth = rect.width - paddingLeft - paddingRight;
     const contentHeight = rect.height - paddingTop - paddingBottom;
@@ -334,9 +336,9 @@ const ECGViewer = () => {
     ctx.clearRect(0, 0, rect.width, rect.height);
 
 
-    const pixelsPerMM = 5;  // 1mm = 5px (Weasis标准)
-    const pixelsPerSecond = mmPerSecond * pixelsPerMM; // 25mm/s * 5px/mm = 125px/s
-    const pixelsPerMV = mmPerMV * pixelsPerMM;         // 10mm/mV * 5px/mm = 50px/mV
+    const pixelsPerMM = 5;
+    const pixelsPerSecond = mmPerSecond * pixelsPerMM; // 25 mm/s * 5 px/mm = 125 px/s
+    const pixelsPerMV = mmPerMV * pixelsPerMM;         // 10 mm/mV * 5 px/mm = 50 px/mV
 
 
     const smallGridTime = 0.04;
@@ -344,10 +346,10 @@ const ECGViewer = () => {
     const smallGridVoltage = 0.1;
     const largeGridVoltage = 0.5;
 
-    const smallGridSizeX = smallGridTime * pixelsPerSecond; // 0.04s * 125px/s = 5px
-    const largeGridSizeX = largeGridTime * pixelsPerSecond; // 0.2s * 125px/s = 25px
-    const smallGridSizeY = smallGridVoltage * pixelsPerMV;  // 0.1mV * 50px/mV = 5px
-    const largeGridSizeY = largeGridVoltage * pixelsPerMV;  // 0.5mV * 50px/mV = 25px
+    const smallGridSizeX = smallGridTime * pixelsPerSecond; // 0.04 s → 5 px
+    const largeGridSizeX = largeGridTime * pixelsPerSecond; // 0.2 s → 25 px
+    const smallGridSizeY = smallGridVoltage * pixelsPerMV;  // 0.1 mV → 5 px
+    const largeGridSizeY = largeGridVoltage * pixelsPerMV;  // 0.5 mV → 25 px
 
 
     ctx.fillStyle = '#fefefe';
@@ -367,34 +369,31 @@ const ECGViewer = () => {
 
     const maxDisplayX = paddingLeft + displayDuration * pixelsPerSecond;
 
-
     const requiredWidth = maxDisplayX + paddingRight;
     const actualWidth = rect.width;
 
-
-
     const centerY = paddingTop + contentHeight / 2;
 
-    // 计算实际数据的电压范围
-    const actualMinVoltage = Math.min(...samples) / 1000; // 转换为mV
-    const actualMaxVoltage = Math.max(...samples) / 1000; // 转换为mV
+    // Compute actual voltage range from raw data
+    const actualMinVoltage = Math.min(...samples) / 1000; // convert to mV
+    const actualMaxVoltage = Math.max(...samples) / 1000; // convert to mV
 
-    // 智能调整电压范围：根据实际数据的最小值和最大值分别调整
+    // Choose min/max bounds using data-driven thresholds
     let minVoltage, maxVoltage;
 
-    // 调整最小值范围：向下取整到0.5mV的倍数，但至少-1.5mV
+    // Floor to 0.5 mV steps with a minimum of -1.5 mV
     minVoltage = Math.min(-1.5, Math.floor(actualMinVoltage / 0.5) * 0.5);
 
-    // 调整最大值范围：向上取整到0.5mV的倍数，但至少+1.5mV
+    // Ceil to 0.5 mV steps with a minimum of +1.5 mV
     maxVoltage = Math.max(1.5, Math.ceil(actualMaxVoltage / 0.5) * 0.5);
 
-    // 计算电压范围（用于网格绘制）
+    // Voltage range used for grid rendering
     const voltageRange = Math.max(Math.abs(minVoltage), maxVoltage);
 
     const gridPaddingFactor = 0.8;
     const extendedPixelsPerMV = pixelsPerMV * (1 + gridPaddingFactor);
 
-    // 使用实际的minVoltage和maxVoltage计算显示范围，但限制在canvas范围内
+    // Compute display Y range using bounds and clamp to canvas
     const minDisplayY = Math.max(paddingTop, centerY - (maxVoltage * extendedPixelsPerMV));
     const maxDisplayY = Math.min(rect.height - paddingBottom, centerY - (minVoltage * extendedPixelsPerMV));
 
@@ -404,7 +403,7 @@ const ECGViewer = () => {
     ctx.lineWidth = 0.5;
     ctx.globalAlpha = 0.7;
 
-    // 时间轴小网格 (0.04秒)
+    // Small vertical grid (0.04 s)
     for (let x = paddingLeft; x <= maxDisplayX; x += smallGridSizeX) {
       ctx.beginPath();
       ctx.moveTo(x, minDisplayY);
@@ -414,7 +413,7 @@ const ECGViewer = () => {
 
 
     const extendedSmallGridSizeY = smallGridVoltage * extendedPixelsPerMV;
-    // 只绘制实际数据范围内的网格
+
     for (let voltage = minVoltage; voltage <= maxVoltage; voltage += smallGridVoltage) {
       const y = centerY - (voltage * extendedPixelsPerMV);
       if (y >= minDisplayY && y <= maxDisplayY) {
@@ -438,8 +437,6 @@ const ECGViewer = () => {
       ctx.stroke();
     }
 
-
-    // 只绘制实际数据范围内的大网格
     for (let voltage = minVoltage; voltage <= maxVoltage; voltage += largeGridVoltage) {
       const y = centerY - (voltage * extendedPixelsPerMV);
       if (y >= minDisplayY && y <= maxDisplayY) {
@@ -474,7 +471,6 @@ const ECGViewer = () => {
       const voltageMV = samples[i] / 1000;
       const y = centerY - (voltageMV * extendedPixelsPerMV);
 
-      // 限制y坐标在显示区域内，避免波形超出边界
       const clampedY = Math.max(minDisplayY, Math.min(maxDisplayY, y));
 
       if (!hasMoved) {
@@ -514,18 +510,18 @@ const ECGViewer = () => {
     ctx.fillStyle = '#2d3748';
     ctx.font = 'bold 16px Arial, sans-serif';
     ctx.textAlign = 'left';
-    ctx.fillText(leadName, paddingLeft, paddingTop - 15); // 调整位置以适应新的padding
+    ctx.fillText(leadName, paddingLeft, paddingTop - 15);
 
     ctx.fillStyle = '#4a5568';
     ctx.font = '11px Arial, sans-serif';
     ctx.textAlign = 'center';
 
-    const timeScaleY = rect.height - paddingBottom + 5; // 贴着横轴边
+    const timeScaleY = rect.height - paddingBottom + 5;
 
     const timeInterval = 0.2;
     const maxTime = displayDuration;
 
-    // 绘制横轴时间标签 - 直接在横轴位置标记
+    // Draw time labels along the X-axis
     ctx.strokeStyle = '#4a5568';
     ctx.lineWidth = 1;
     ctx.fillStyle = '#4a5568';
@@ -536,37 +532,33 @@ const ECGViewer = () => {
       const x = paddingLeft + t * pixelsPerSecond;
 
       if (x >= paddingLeft && x <= maxDisplayX) {
-        // 绘制时间标签 - 在ECG波形最下方
+
         const timeLabel = t.toFixed(1);
         ctx.fillText(timeLabel, x, maxDisplayY + 10);
       }
     }
 
-
-
     ctx.textAlign = 'right';
     ctx.font = '11px Arial, sans-serif';
 
-
     const voltageScaleX = 45;
-
 
     ctx.strokeStyle = '#4a5568';
     ctx.lineWidth = 1;
 
-    // 使用计算出的电压范围绘制标签
+    // Draw voltage tick labels using computed range
     for (let voltage = minVoltage; voltage <= maxVoltage; voltage += 0.5) { // 0.5mV间隔
       const y = centerY - (voltage * extendedPixelsPerMV);
 
-      // 只绘制在显示范围内的标签
+      // Only render labels within visible band
       if (y >= minDisplayY && y <= maxDisplayY) {
-        // 绘制电压标记线
+        // Voltage tick mark
         ctx.beginPath();
         ctx.moveTo(paddingLeft - 6, y);
         ctx.lineTo(paddingLeft, y);
         ctx.stroke();
 
-        // 绘制电压标签
+        // Voltage tick label
         const voltageText = voltage === 0 ? '0' :
           voltage > 0 ? `+${voltage.toFixed(1)}` :
             `${voltage.toFixed(1)}`;
@@ -603,15 +595,15 @@ const ECGViewer = () => {
 
     // Y-axis label (voltage)
     ctx.save();
-    ctx.translate(35, centerY); // 调整位置以适应新的padding
+    ctx.translate(35, centerY);
     ctx.rotate(-Math.PI / 2);
     ctx.textAlign = 'center';
     ctx.fillText('Amplitude (mV)', 0, 0);
     ctx.restore();
 
-    // X-axis label (time) - 在ECG波形最下方
+    // X-axis label (time) at the bottom
     ctx.textAlign = 'center';
-    ctx.fillText('Time (s)', paddingLeft + contentWidth / 2, rect.height - 20); // 调整位置以适应新的padding
+    ctx.fillText('Time (s)', paddingLeft + contentWidth / 2, rect.height - 20);
 
   }, [waveformData, samplingRate, leadNames]);
 
@@ -638,12 +630,12 @@ const ECGViewer = () => {
     const ctx = canvas.getContext('2d');
     const rect = canvas.getBoundingClientRect();
 
-    // 🔥 Dual lead layout parameters - 优化padding以确保所有信息完全显示
-    const paddingLeft = 100;  // 增加左侧空间以容纳Y轴标签和电压标尺
-    const paddingBottom = 80; // 增加底部空间以容纳时间轴标签
-    const paddingTop = 60;    // 增加顶部空间以容纳lead标签
-    const paddingRight = 50;  // 增加右侧空间以防止内容被截断
-    const leadSpacing = 30;   // 增加lead之间的间距
+    // 🔥 Dual lead layout parameters - 
+    const paddingLeft = 100;
+    const paddingBottom = 80;
+    const paddingTop = 60;
+    const paddingRight = 50;
+    const leadSpacing = 30;
 
     const contentWidth = rect.width - paddingLeft - paddingRight;
     const contentHeight = rect.height - paddingTop - paddingBottom;
@@ -654,7 +646,7 @@ const ECGViewer = () => {
     ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
     ctx.clearRect(0, 0, rect.width, rect.height);
 
-    const pixelsPerMM = 5;  // 1mm = 5px (Weasis标准)
+    const pixelsPerMM = 5;  // 1mm = 5px 
     const pixelsPerSecond = mmPerSecond * pixelsPerMM; // 25mm/s * 5px/mm = 125px/s
     const pixelsPerMV = mmPerMV * pixelsPerMM;         // 10mm/mV * 5px/mm = 50px/mV
 
@@ -694,8 +686,8 @@ const ECGViewer = () => {
       const centerY = leadTop + leadHeight / 2;
 
       // Calculate voltage range for this lead
-      const actualMinVoltage = Math.min(...samples) / 1000; // 转换为mV
-      const actualMaxVoltage = Math.max(...samples) / 1000; // 转换为mV
+      const actualMinVoltage = Math.min(...samples) / 1000;
+      const actualMaxVoltage = Math.max(...samples) / 1000;
 
       let minVoltage, maxVoltage;
       minVoltage = Math.min(-1.5, Math.floor(actualMinVoltage / 0.5) * 0.5);
@@ -705,11 +697,11 @@ const ECGViewer = () => {
       const gridPaddingFactor = 0.8;
       const extendedPixelsPerMV = pixelsPerMV * (1 + gridPaddingFactor);
 
-      // 限制显示范围在lead区域内，避免波形超出边界
+
       const minDisplayY = Math.max(leadTop, centerY - (maxVoltage * extendedPixelsPerMV));
       const maxDisplayY = Math.min(leadBottom, centerY - (minVoltage * extendedPixelsPerMV));
 
-      // Draw grid for this lead - 使用与单lead相同的红色网格样式
+      // Draw grid for this lead 
       ctx.strokeStyle = '#ff6b6b';
       ctx.lineWidth = 0.5;
       ctx.globalAlpha = 0.7;
@@ -770,7 +762,7 @@ const ECGViewer = () => {
         const voltage = samples[i] / 1000; // Convert to mV
         const y = centerY - (voltage * extendedPixelsPerMV);
 
-        // 限制y坐标在lead区域内，避免波形超出边界
+
         const clampedY = Math.max(leadTop, Math.min(leadBottom, y));
 
         if (i === 0) {
@@ -779,19 +771,6 @@ const ECGViewer = () => {
           ctx.lineTo(x, clampedY);
         }
       }
-      ctx.stroke();
-
-      // Draw lead borders (top and bottom)
-      ctx.strokeStyle = '#ff6b6b';
-      ctx.lineWidth = 1.2;
-      ctx.globalAlpha = 1.0;
-      ctx.beginPath();
-      // Top border
-      ctx.moveTo(paddingLeft, leadTop);
-      ctx.lineTo(maxDisplayX, leadTop);
-      // Bottom border
-      ctx.moveTo(paddingLeft, leadBottom);
-      ctx.lineTo(maxDisplayX, leadBottom);
       ctx.stroke();
 
       // Draw lead borders (top and bottom)
@@ -819,7 +798,7 @@ const ECGViewer = () => {
       ctx.font = 'bold 14px Arial, sans-serif';
       ctx.fillStyle = '#2d3748';
       ctx.textAlign = 'left';
-      ctx.fillText(leadName, paddingLeft + 10, leadTop + 25); // 调整位置以适应新的padding
+      ctx.fillText(leadName, paddingLeft + 10, leadTop + 25);
 
       // Add voltage scale labels for this lead
       ctx.font = '11px Arial, sans-serif';
@@ -835,14 +814,14 @@ const ECGViewer = () => {
       }
     });
 
-    // Add time labels (shared for both leads) - 显示在最后一个lead下方
+    // Add time labels (shared for both leads) 
     ctx.font = '11px Arial, sans-serif';
     ctx.fillStyle = '#718096';
     ctx.textAlign = 'center';
 
-    // 计算最后一个lead的底部位置
-    const lastLeadBottom = paddingTop + leadHeight + leadSpacing + leadHeight; // 第二个lead的底部
-    const timeLabelsY = lastLeadBottom + 20; // 在最后一个lead下方20px处显示时间标签
+
+    const lastLeadBottom = paddingTop + leadHeight + leadSpacing + leadHeight;
+    const timeLabelsY = lastLeadBottom + 20;
 
     for (let time = 0; time <= displayDuration; time += 0.2) {
       const x = paddingLeft + time * pixelsPerSecond;
@@ -857,19 +836,19 @@ const ECGViewer = () => {
 
     // Y-axis label (voltage) - centered between leads
     ctx.save();
-    ctx.translate(35, paddingTop + contentHeight / 2); // 调整位置以适应新的padding
+    ctx.translate(35, paddingTop + contentHeight / 2);
     ctx.rotate(-Math.PI / 2);
     ctx.textAlign = 'center';
     ctx.fillText('Amplitude (mV)', 0, 0);
     ctx.restore();
 
-    // X-axis label (time) - 显示在时间标签下方
+    // X-axis label (time) 
     ctx.textAlign = 'center';
     ctx.fillText('Time (s)', paddingLeft + contentWidth / 2, timeLabelsY + 15);
 
   }, [waveformData, samplingRate, leadNames, mmPerSecond, mmPerMV]);
 
-  // Professional ECG with Lead II reference - 始终在底部显示Lead II作为参考
+  // Professional ECG with Lead II reference 
   const drawSingleLeadWithReference = React.useCallback((canvasId, leadIndex, waveformDataToUse = null) => {
     const canvas = document.getElementById(canvasId);
     if (!canvas) {
@@ -969,7 +948,7 @@ const ECGViewer = () => {
       const gridPaddingFactor = 0.8;
       const extendedPixelsPerMV = pixelsPerMV * (1 + gridPaddingFactor);
 
-      // 限制显示范围在lead区域内
+      // Clamp visible Y range to the lead band
       const minDisplayY = Math.max(leadTop, centerY - (maxVoltage * extendedPixelsPerMV));
       const maxDisplayY = Math.min(leadBottom, centerY - (minVoltage * extendedPixelsPerMV));
 
@@ -1084,14 +1063,14 @@ const ECGViewer = () => {
       }
     });
 
-    // Add time labels (shared for both leads) - 显示在Lead II Reference下方
+    // Add time labels (shared for both leads) - placed under Lead II reference
     ctx.font = '11px Arial, sans-serif';
     ctx.fillStyle = '#718096';
     ctx.textAlign = 'center';
 
-    // 计算Lead II Reference的底部位置（第二个lead）
-    const lead2ReferenceBottom = paddingTop + leadHeight + leadSpacing + leadHeight; // Lead II Reference的底部
-    const timeLabelsY = lead2ReferenceBottom + 20; // 在Lead II Reference下方20px处显示时间标签
+
+    const lead2ReferenceBottom = paddingTop + leadHeight + leadSpacing + leadHeight; // bottom of Lead II reference
+    const timeLabelsY = lead2ReferenceBottom + 20;
 
     for (let time = 0; time <= displayDuration; time += 0.2) {
       const x = paddingLeft + time * pixelsPerSecond;
@@ -1112,13 +1091,13 @@ const ECGViewer = () => {
     ctx.fillText('Amplitude (mV)', 0, 0);
     ctx.restore();
 
-    // X-axis label (time) - 显示在时间标签下方
+    // X-axis label (time) 
     ctx.textAlign = 'center';
     ctx.fillText('Time (s)', paddingLeft + contentWidth / 2, timeLabelsY + 15);
 
   }, [waveformData, samplingRate, leadNames, mmPerSecond, mmPerMV]);
 
-  // Professional ECG dual leads with Lead II reference - 始终在底部显示Lead II作为参考
+  // Professional ECG dual leads with Lead II reference 
   const drawDualLeadsWithReference = React.useCallback((canvasId, leadIndices, waveformDataToUse = null) => {
     const canvas = document.getElementById(canvasId);
     if (!canvas) {
@@ -1220,7 +1199,7 @@ const ECGViewer = () => {
       const gridPaddingFactor = 0.8;
       const extendedPixelsPerMV = pixelsPerMV * (1 + gridPaddingFactor);
 
-      // 限制显示范围在lead区域内
+      // Clamp visible Y range to the lead band
       const minDisplayY = Math.max(leadTop, centerY - (maxVoltage * extendedPixelsPerMV));
       const maxDisplayY = Math.min(leadBottom, centerY - (minVoltage * extendedPixelsPerMV));
 
@@ -1335,14 +1314,14 @@ const ECGViewer = () => {
       }
     });
 
-    // Add time labels (shared for all leads) - 显示在最后一个lead下方
+    // Add time labels (shared for all leads) - placed below the last lead
     ctx.font = '11px Arial, sans-serif';
     ctx.fillStyle = '#718096';
     ctx.textAlign = 'center';
 
-    // 计算最后一个lead（Lead II Reference）的底部位置
-    const lastLeadBottom = paddingTop + 2 * (leadHeight + leadSpacing) + leadHeight; // 第三个lead（Lead II Reference）的底部
-    const timeLabelsY = lastLeadBottom + 20; // 在最后一个lead下方20px处显示时间标签
+    // Compute bottom of the last lead (Lead II reference)
+    const lastLeadBottom = paddingTop + 2 * (leadHeight + leadSpacing) + leadHeight; // third lead bottom
+    const timeLabelsY = lastLeadBottom + 20; // draw time labels 20px below
 
     for (let time = 0; time <= displayDuration; time += 0.2) {
       const x = paddingLeft + time * pixelsPerSecond;
@@ -1363,7 +1342,7 @@ const ECGViewer = () => {
     ctx.fillText('Amplitude (mV)', 0, 0);
     ctx.restore();
 
-    // X-axis label (time) - 显示在时间标签下方
+    // X-axis label (time) 
     ctx.textAlign = 'center';
     ctx.fillText('Time (s)', paddingLeft + contentWidth / 2, timeLabelsY + 15);
 
@@ -1676,14 +1655,16 @@ const ECGViewer = () => {
 
         {/* ⭐ New addition: Lead selector with checkbox mode */}
         <div>
-          <div style={{ marginBottom: 12 }}>
-            <Checkbox
-              checked={isMultipleMode}
-              onChange={(e) => handleMultipleModeChange(e.target.checked)}
-            >
-              Multiple (12 leads)
-            </Checkbox>
-          </div>
+          {false && (
+            <div style={{ marginBottom: 12 }}>
+              <Checkbox
+                checked={isMultipleMode}
+                onChange={(e) => handleMultipleModeChange(e.target.checked)}
+              >
+                Multiple (12 leads)
+              </Checkbox>
+            </div>
+          )}
 
           {!isMultipleMode && (
             <div>
@@ -1723,32 +1704,34 @@ const ECGViewer = () => {
           )}
         </div>
 
-        {/* Weasis-like parameter controls */}
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <div>
-            <span style={{ marginRight: 8 }}>Speed (mm/s):</span>
-            <Select value={mmPerSecond} style={{ width: 120 }} onChange={setMmPerSecond}>
-              <Option value={25}>25</Option>
-              <Option value={50}>50</Option>
-            </Select>
+        {/* Weasis-like parameter controls (hidden while multiple leads disabled) */}
+        {false && (
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <div>
+              <span style={{ marginRight: 8 }}>Speed (mm/s):</span>
+              <Select value={mmPerSecond} style={{ width: 120 }} onChange={setMmPerSecond}>
+                <Option value={25}>25</Option>
+                <Option value={50}>50</Option>
+              </Select>
+            </div>
+            <div>
+              <span style={{ marginRight: 8 }}>Gain (mm/mV):</span>
+              <Select value={mmPerMV} style={{ width: 120 }} onChange={setMmPerMV}>
+                <Option value={5}>5</Option>
+                <Option value={10}>10</Option>
+                <Option value={20}>20</Option>
+              </Select>
+            </div>
+            <div>
+              <span style={{ marginRight: 8 }}>Display format:</span>
+              <Select value={displayPreset} style={{ width: 160 }} onChange={setDisplayPreset}>
+                <Option value="1x10">1 x 10s</Option>
+                <Option value="2x5">2 x 5s</Option>
+                <Option value="4x2.5">4 x 2.5s</Option>
+              </Select>
+            </div>
           </div>
-          <div>
-            <span style={{ marginRight: 8 }}>Gain (mm/mV):</span>
-            <Select value={mmPerMV} style={{ width: 120 }} onChange={setMmPerMV}>
-              <Option value={5}>5</Option>
-              <Option value={10}>10</Option>
-              <Option value={20}>20</Option>
-            </Select>
-          </div>
-          <div>
-            <span style={{ marginRight: 8 }}>Display format:</span>
-            <Select value={displayPreset} style={{ width: 160 }} onChange={setDisplayPreset}>
-              <Option value="1x10">1 x 10s</Option>
-              <Option value="2x5">2 x 5s</Option>
-              <Option value="4x2.5">4 x 2.5s</Option>
-            </Select>
-          </div>
-        </div>
+        )}
 
 
 
