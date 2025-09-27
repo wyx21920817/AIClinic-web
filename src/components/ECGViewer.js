@@ -87,7 +87,7 @@ const ECGViewer = () => {
   const containerId = 'ecg-container';
 
   const [selectedLead, setSelectedLead] = React.useState("multiple"); // ⭐ Keep for backward compatibility
-  const [selectedLeads, setSelectedLeads] = React.useState([]); // ⭐ New: Array of selected lead indices
+  const [selectedLeads, setSelectedLeads] = React.useState([1]); // ⭐ Default to Lead II
   const [isMultipleMode, setIsMultipleMode] = React.useState(false); // Default to single-lead mode
   const [dicomArrayBuffer, setDicomArrayBuffer] = React.useState(null); // Store DICOM data
   const [waveformData, setWaveformData] = React.useState(null); // 2D array: [lead][samples]
@@ -105,7 +105,8 @@ const ECGViewer = () => {
       setSelectedLeads([]);
       setSelectedLead("multiple");
     } else {
-      setSelectedLead("0"); // Default to first lead
+      setSelectedLead("1"); // Default to Lead II
+      setSelectedLeads([1]);
     }
   };
 
@@ -124,7 +125,8 @@ const ECGViewer = () => {
       if (newSelectedLeads.length > 0) {
         setSelectedLead(newSelectedLeads[0].toString());
       } else {
-        setSelectedLead("0");
+        setSelectedLead("1"); // Fallback to Lead II
+        setSelectedLeads([1]);
       }
     }
   };
@@ -182,6 +184,7 @@ const ECGViewer = () => {
     waveformSeq.items.forEach((item, itemIndex) => {
       const itemData = byteArray.slice(item.dataOffset, item.dataOffset + item.length);
       let offset = 0;
+      let decodedThisItem = false; // avoid double-appending the same item's data
       while (offset + 8 <= itemData.length) {
         const group = itemData[offset] + (itemData[offset + 1] << 8);
         const element = itemData[offset + 2] + (itemData[offset + 3] << 8);
@@ -210,23 +213,34 @@ const ECGViewer = () => {
             waveformBuffer.byteOffset,
             waveformBuffer.length
           );
+          // Assume 16-bit little-endian signed samples (most common for DICOM ECG)
           const flat = new Int16Array(Math.floor(waveformBuffer.length / 2));
           for (let j = 0; j < flat.length; j++) {
             flat[j] = dataView.getInt16(j * 2, true);
           }
 
-          // If multi-channel interleaved, split by channel and accumulate
+          // Try interleaved first
           if (flat.length % channelCount === 0) {
-            const samplesPerLead = flat.length / channelCount;
+            const samplesPerLeadInterleaved = flat.length / channelCount;
             for (let c = 0; c < channelCount; c++) {
-              for (let k = 0; k < samplesPerLead; k++) {
+              for (let k = 0; k < samplesPerLeadInterleaved; k++) {
                 accumPerLead[c].push(flat[k * channelCount + c]);
               }
             }
+          } else if (samplesPerChannel > 0 && flat.length === samplesPerChannel * channelCount) {
+            // Non-interleaved contiguous blocks per channel
+            for (let c = 0; c < channelCount; c++) {
+              const startIdx = c * samplesPerChannel;
+              for (let k = 0; k < samplesPerChannel; k++) {
+                accumPerLead[c].push(flat[startIdx + k]);
+              }
+            }
           } else {
-            // When not evenly divisible, process as single channel for one lead (fallback)
+            // Fallback: push into first lead to preserve data without duplication
             accumPerLead[0].push(...Array.from(flat));
           }
+
+          decodedThisItem = true; // mark as handled to prevent fallback re-append
 
           break; // This item completed
         }
@@ -237,7 +251,8 @@ const ECGViewer = () => {
       }
 
       // Fallback: Some parsers mount dataSet on item, can directly read element offset
-      if (allLeads.length <= itemIndex && item.dataSet && item.dataSet.elements) {
+      // Only execute if this item hasn't been decoded via the primary path above
+      if (!decodedThisItem && item.dataSet && item.dataSet.elements) {
         const el = item.dataSet.elements['x54001010'];
         if (el && el.length > 0) {
           const start = el.dataOffset;
@@ -247,10 +262,17 @@ const ECGViewer = () => {
           const arr = new Int16Array(Math.floor(wf.length / 2));
           for (let k = 0; k < arr.length; k++) arr[k] = dv.getInt16(k * 2, true);
           if (arr.length % channelCount === 0) {
-            const samplesPerLead = arr.length / channelCount;
+            const samplesPerLeadInterleaved = arr.length / channelCount;
             for (let c = 0; c < channelCount; c++) {
-              for (let k = 0; k < samplesPerLead; k++) {
+              for (let k = 0; k < samplesPerLeadInterleaved; k++) {
                 accumPerLead[c].push(arr[k * channelCount + c]);
+              }
+            }
+          } else if (samplesPerChannel > 0 && arr.length === samplesPerChannel * channelCount) {
+            for (let c = 0; c < channelCount; c++) {
+              const startIdx = c * samplesPerChannel;
+              for (let k = 0; k < samplesPerChannel; k++) {
+                accumPerLead[c].push(arr[startIdx + k]);
               }
             }
           } else {
@@ -277,18 +299,28 @@ const ECGViewer = () => {
     });
 
 
-    if (allLeads.length > 0 && allLeads[0].length > 0) {
-      const actualSamples = allLeads[0].length;
+    if (allLeads.length > 0) {
+      const actualSamples = Math.min(...allLeads.map(l => l.length));
       const actualDuration = actualSamples / samplingRate;
 
 
 
-      if (actualSamples < 3000 && actualDuration < 10) {
+      if (actualDuration < 10) {
         const originalSamplingRate = samplingRate;
-        const newSamplingRate = 100;
+
+
+        const samplingRateOptions = [500, 400, 250, 100];
+        let newSamplingRate = 100;
+
+        for (const rate of samplingRateOptions) {
+          const testDuration = actualSamples / rate;
+          if (testDuration >= 10) {
+            newSamplingRate = rate;
+            break;
+          }
+        }
+
         const newDuration = actualSamples / newSamplingRate;
-
-
 
         if (onSamplingRateChange) {
           onSamplingRateChange(newSamplingRate);
@@ -605,7 +637,7 @@ const ECGViewer = () => {
     ctx.textAlign = 'center';
     ctx.fillText('Time (s)', paddingLeft + contentWidth / 2, rect.height - 20);
 
-  }, [waveformData, samplingRate, leadNames]);
+  }, [waveformData, samplingRate, leadNames, mmPerSecond, mmPerMV]);
 
   // Professional ECG dual leads rendering - reference the image style
   const drawDualLeads = React.useCallback((canvasId, leadIndices, waveformDataToUse = null) => {
@@ -1407,7 +1439,7 @@ const ECGViewer = () => {
       container.appendChild(canvas);
       setCurrentCanvasId(canvasId); // Save canvas ID to state
 
-      const leadIndex = isMultipleMode ? 0 : (selectedLeads.length > 0 ? selectedLeads[0] : 0); // ⭐ Updated logic
+      const leadIndex = isMultipleMode ? 0 : (selectedLeads.length > 0 ? selectedLeads[0] : 1); // Default to Lead II when none selected
       const leadDisplayNames = ['Lead I', 'Lead II', 'Lead III', 'aVR', 'aVL', 'aVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6'];
       const nameView = isMultipleMode ? '' : (leadDisplayNames[leadIndex] || '');
 
@@ -1441,12 +1473,7 @@ const ECGViewer = () => {
         const parsedLeads = parseWaveformData(parentDataSet, parentByteArray, setSamplingRate);
         if (parsedLeads && parsedLeads.length > 0) {
           setWaveformData(parsedLeads);
-
-
-          // Use setTimeout to ensure drawing after state update
-          setTimeout(() => {
-            drawSingleLead(canvasId, leadIndex, parsedLeads);
-          }, 0);
+          // Rendering will be triggered by the effect that watches waveformData/selectedLeads/samplingRate
         } else {
           setError('No waveform data found for single lead rendering');
         }
@@ -1539,7 +1566,7 @@ const ECGViewer = () => {
         }
       }, 100);
     }
-  }, [waveformData, isMultipleMode, selectedLeads, currentCanvasId, drawSingleLeadWithReference, drawDualLeadsWithReference]);
+  }, [waveformData, samplingRate, isMultipleMode, selectedLeads, currentCanvasId, drawSingleLeadWithReference, drawDualLeadsWithReference]);
 
 
 
