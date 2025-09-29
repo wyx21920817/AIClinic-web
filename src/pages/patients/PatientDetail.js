@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-import { Card, Descriptions, Button, Space, Upload, List, Tag, message, Modal, Form, Input, Select, DatePicker, Tooltip, Typography, Progress, Checkbox } from 'antd';
+import { Card, Descriptions, Button, Space, Upload, List, Tag, message, Modal, Form, Input, Select, DatePicker, Tooltip, Typography, Progress, Checkbox, Popconfirm } from 'antd';
 import { useParams, useNavigate } from 'react-router-dom';
 import { UploadOutlined, EditOutlined, DeleteOutlined, CopyOutlined, UserOutlined, MailOutlined, IdcardOutlined, DatabaseOutlined, ClockCircleOutlined, NumberOutlined, EyeOutlined, ExperimentOutlined, BarChartOutlined, FileTextOutlined, CalendarOutlined, HeartOutlined, MessageOutlined } from '@ant-design/icons';
 
@@ -212,13 +212,14 @@ const PatientDetail = () => {
     }
   };
 
-  const handleDeleteFile = async (fileId) => {
+  const handleDeleteFile = async (fileId, userIdOverride) => {
     try {
-      if (!patient || !patient.id) {
+      const userIdToUse = userIdOverride || (patient && patient.id);
+      if (!userIdToUse) {
         message.error('Patient ID not found');
         return;
       }
-      await patientsApi.deleteEcgFile(patient.id, fileId);
+      await patientsApi.deleteEcgFile(userIdToUse, fileId);
       message.success('ECG file deleted successfully');
       fetchEcgFiles();
     } catch (error) {
@@ -847,7 +848,7 @@ const PatientDetail = () => {
                               // Get the content and parse it
                               const content = String(file.content || '').trim();
                               let data = {};
-                              
+
                               try {
                                 // Try to parse as JSON
                                 data = JSON.parse(content.replace(/'/g, '"').replace(/([,{\s])([A-Za-z0-9_]+)\s*:/g, '$1"$2":'));
@@ -859,7 +860,7 @@ const PatientDetail = () => {
                                   data[match[1]] = match[2];
                                 }
                               }
-                              
+
                               // These are the only fields we want to show
                               const fieldsToShow = [
                                 'Manufacturer',
@@ -870,24 +871,24 @@ const PatientDetail = () => {
                                 'StudyTime',
                                 'StudyDate'
                               ];
-                              
+
                               // Filter out PatientComments to display separately
                               const regularFields = fieldsToShow.filter(field => field !== 'PatientComments');
                               const patientComments = data['PatientComments'] || '';
-                              
+
                               return (
                                 <div>
                                   {/* PatientComments with special emphasis - MOVED TO TOP */}
-                                  <div style={{ 
-                                    border: '2px solid #1890ff', 
-                                    borderRadius: '4px', 
+                                  <div style={{
+                                    border: '2px solid #1890ff',
+                                    borderRadius: '4px',
                                     padding: '16px',
                                     backgroundColor: '#f0f7ff',
                                     marginBottom: '20px'
                                   }}>
-                                    <div style={{ 
-                                      fontWeight: 'bold', 
-                                      fontSize: '16px', 
+                                    <div style={{
+                                      fontWeight: 'bold',
+                                      fontSize: '16px',
                                       marginBottom: '12px',
                                       color: '#1890ff',
                                       borderBottom: '1px solid #1890ff',
@@ -895,7 +896,7 @@ const PatientDetail = () => {
                                     }}>
                                       Patient Comments (AI Predictions)
                                     </div>
-                                    <div style={{ 
+                                    <div style={{
                                       backgroundColor: 'white',
                                       padding: '12px',
                                       border: '1px solid #d9d9d9',
@@ -903,34 +904,34 @@ const PatientDetail = () => {
                                     }}>
                                       {(() => {
                                         if (!patientComments) return 'No comments available';
-                                        
+
                                         // Parse the PatientComments to extract disease:probability pairs
                                         const parts = patientComments.split('|');
                                         const predictions = [];
-                                        
+
                                         // Process each part (usually first part is main predictions, second part is ResNet)
                                         parts.forEach((part, partIndex) => {
                                           const isResNet = part.includes('ResNet');
                                           const title = isResNet ? 'ResNet Model Predictions' : '1D Model Results';
-                                          
+
                                           // Extract the disease:probability pairs
                                           const pairs = [];
                                           const regex = /([A-Z0-9dAVB]+):(\d+\.\d+)/g;
                                           let match;
-                                          
+
                                           while ((match = regex.exec(part)) !== null) {
                                             const disease = match[1];
                                             const probability = parseFloat(match[2]);
-                                            
+
                                             // Only include non-zero probabilities
                                             if (probability > 0.01) {
                                               pairs.push({ disease, probability });
                                             }
                                           }
-                                          
+
                                           // Sort by probability in descending order
                                           pairs.sort((a, b) => b.probability - a.probability);
-                                          
+
                                           if (pairs.length > 0.01) {
                                             predictions.push({ title, pairs });
                                           }
@@ -950,9 +951,9 @@ const PatientDetail = () => {
                                                       let color = '#52c41a'; // green for low values
                                                       if (percentage > 20) color = '#faad14'; // yellow for medium
                                                       if (percentage > 50) color = '#f5222d'; // red for high
-                                                      
+
                                                       return (
-                                                        <div key={pairIdx} style={{ 
+                                                        <div key={pairIdx} style={{
                                                           backgroundColor: '#f9f9f9',
                                                           border: `1px solid ${color}`,
                                                           borderRadius: '3px',
@@ -965,7 +966,7 @@ const PatientDetail = () => {
                                                             <span style={{ fontWeight: 'bold', fontSize: '12px' }}>{pair.disease}</span>
                                                             <span style={{ color, fontWeight: 'bold', fontSize: '12px' }}>{percentage}%</span>
                                                           </div>
-                                                          <Progress 
+                                                          <Progress
                                                             percent={percentage}
                                                             size="small"
                                                             showInfo={false}
@@ -978,11 +979,11 @@ const PatientDetail = () => {
                                                 </div>
                                               ))}
                                             </div>
-                                            
+
                                             {/* Show raw data in small text at bottom */}
-                                            <div style={{ 
-                                              marginTop: '12px', 
-                                              fontSize: '12px', 
+                                            <div style={{
+                                              marginTop: '12px',
+                                              fontSize: '12px',
                                               color: '#999',
                                               fontFamily: 'monospace',
                                               padding: '8px',
@@ -996,7 +997,7 @@ const PatientDetail = () => {
                                       })()}
                                     </div>
                                   </div>
-                                  
+
                                   {/* Regular fields in a table */}
                                   <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #ccc', marginBottom: '20px' }}>
                                     <thead>
@@ -1022,7 +1023,7 @@ const PatientDetail = () => {
                               // If anything goes wrong, just show the raw content
                               return <div>{String(file.content || '')}</div>;
                             }
-                            
+
                             // The table is already created above
                             return null;
                           })()}
@@ -1055,10 +1056,28 @@ const PatientDetail = () => {
                                 }}
                               />
                             </Tooltip>,
+                            <Tooltip key="delete" title="Delete ECG File">
+                              <Popconfirm
+                                title="Are you sure you want to delete this ECG instance?"
+                                okText="Delete"
+                                okType="danger"
+                                cancelText="Cancel"
+                                onConfirm={() => handleDeleteFile(instanceId, file.user_id)}
+                              >
+                                <Button
+                                  danger
+                                  type="text"
+                                  size="small"
+                                  shape="circle"
+                                  icon={<DeleteOutlined />}
+                                />
+                              </Popconfirm>
+                            </Tooltip>,
                             <Tooltip key="view" title="Open ECG Viewer">
                               <Button
                                 type="primary"
                                 size="small"
+                                shape="round"
                                 icon={<EyeOutlined />}
                                 onClick={() => navigate(`/ecg-view/${file.user_id}/${instanceId}`)}
                               >
