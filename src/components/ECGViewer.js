@@ -2,7 +2,7 @@ import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { DicomECGViewer } from 'ecg-dicom-web-viewer';
 import dicomParser from 'dicom-parser';
-import { Card, Space, Typography, Upload, Progress, Row, Col, Button, message, Select, Checkbox } from 'antd'; // ⭐ Modified: Import Select and Checkbox components
+import { Card, Space, Typography, Upload, Progress, Row, Col, Button, message, Select, Checkbox } from 'antd';
 import { InboxOutlined, FileImageOutlined, ArrowLeftOutlined, ExperimentOutlined } from '@ant-design/icons';
 import request from '../services/api/request';
 import { API_ENDPOINTS } from '../services/api/config';
@@ -86,8 +86,8 @@ const ECGViewer = () => {
   const viewerRef = React.useRef(null);
   const containerId = 'ecg-container';
 
-  const [selectedLead, setSelectedLead] = React.useState("multiple"); // ⭐ Keep for backward compatibility
-  const [selectedLeads, setSelectedLeads] = React.useState([1]); // ⭐ Default to Lead II
+  const [selectedLead, setSelectedLead] = React.useState("multiple");
+  const [selectedLeads, setSelectedLeads] = React.useState([1]);
   const [isMultipleMode, setIsMultipleMode] = React.useState(false); // Default to single-lead mode
   const [dicomArrayBuffer, setDicomArrayBuffer] = React.useState(null); // Store DICOM data
   const [waveformData, setWaveformData] = React.useState(null); // 2D array: [lead][samples]
@@ -96,7 +96,6 @@ const ECGViewer = () => {
   const [currentCanvasId, setCurrentCanvasId] = React.useState(null); // Store current canvas ID
   const [selectedDiseasesXAI, setSelectedDiseasesXAI] = React.useState([]);
 
-  // Multiple-leads viewing temporarily disabled; single-lead remains enabled
 
   // Lead selection handlers
   const handleMultipleModeChange = (checked) => {
@@ -662,7 +661,7 @@ const ECGViewer = () => {
     const ctx = canvas.getContext('2d');
     const rect = canvas.getBoundingClientRect();
 
-    // 🔥 Dual lead layout parameters - 
+    // Dual lead layout parameters 
     const paddingLeft = 100;
     const paddingBottom = 80;
     const paddingTop = 60;
@@ -902,7 +901,7 @@ const ECGViewer = () => {
     const ctx = canvas.getContext('2d');
     const rect = canvas.getBoundingClientRect();
 
-    // 🔥 Three-section layout: selected lead + Lead II reference
+    // Three-section layout: selected lead + Lead II reference
     const paddingLeft = 100;
     const paddingBottom = 80;
     const paddingTop = 60;
@@ -1129,6 +1128,392 @@ const ECGViewer = () => {
 
   }, [waveformData, samplingRate, leadNames, mmPerSecond, mmPerMV]);
 
+  // Multiple-leads 4-row concatenated layout (I-aVR-V1-V4 | II-aVL-V2-V5 | III-aVF-V3-V6 | II Ref)
+  const drawMultipleLeadsConcatenated = React.useCallback((canvasId, waveformDataToUse = null) => {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    if (canvas.tagName !== 'CANVAS') return;
+
+    const dataToUse = waveformDataToUse || waveformData;
+    if (!dataToUse || dataToUse.length < 12) return;
+
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.getBoundingClientRect();
+
+    const paddingLeft = 100;
+    const paddingBottom = 80;
+    const paddingTop = 60;
+    const paddingRight = 50;
+    const leadSpacing = 0;
+
+    canvas.width = rect.width * window.devicePixelRatio;
+    canvas.height = rect.height * window.devicePixelRatio;
+    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+
+    const contentWidth = rect.width - paddingLeft - paddingRight;
+    const contentHeight = rect.height - paddingTop - paddingBottom;
+
+    const pixelsPerMM = 5;
+    const pixelsPerSecond = mmPerSecond * pixelsPerMM; // 25→125 px/s
+    const pixelsPerMV = mmPerMV * pixelsPerMM;
+
+    const smallGridTime = 0.04, largeGridTime = 0.2;
+    const smallGridVoltage = 0.1, largeGridVoltage = 0.5;
+    const smallGridSizeX = smallGridTime * pixelsPerSecond;
+    const largeGridSizeX = largeGridTime * pixelsPerSecond;
+
+    ctx.fillStyle = '#fefefe';
+    ctx.fillRect(0, 0, rect.width, rect.height);
+
+    // Build 4 rows by concatenating quarters from specific leads
+    const n = dataToUse[0].length;
+    const q1 = Math.floor(n / 4), q2 = Math.floor(n / 2), q3 = Math.floor(3 * n / 4);
+    const row1 = Int16Array.from([
+      ...dataToUse[0].slice(0, q1),      // I
+      ...dataToUse[3].slice(q1, q2),     // aVR
+      ...dataToUse[6].slice(q2, q3),     // V1
+      ...dataToUse[9].slice(q3, n)       // V4
+    ]);
+    const row2 = Int16Array.from([
+      ...dataToUse[1].slice(0, q1),      // II
+      ...dataToUse[4].slice(q1, q2),     // aVL
+      ...dataToUse[7].slice(q2, q3),     // V2
+      ...dataToUse[10].slice(q3, n)      // V5
+    ]);
+    const row3 = Int16Array.from([
+      ...dataToUse[2].slice(0, q1),      // III
+      ...dataToUse[5].slice(q1, q2),     // aVF
+      ...dataToUse[8].slice(q2, q3),     // V3
+      ...dataToUse[11].slice(q3, n)      // V6
+    ]);
+    const row4 = dataToUse[1]; // Lead II full length reference
+
+    const bands = [
+      { samples: row1, label: 'I' },
+      { samples: row2, label: 'II' },
+      { samples: row3, label: 'III' },
+      { samples: row4, label: 'Lead II (Reference)', isReference: true }
+    ];
+
+    const totalBands = bands.length;
+    const leadHeight = contentHeight / totalBands;
+
+    // 10s target duration
+    const actualDuration = n / samplingRate;
+    const displayDuration = actualDuration >= 10 ? 10 : actualDuration;
+    const maxDisplayX = paddingLeft + displayDuration * pixelsPerSecond;
+
+    // draw uniform grid background
+    const gridTop = paddingTop;
+    const gridBottom = paddingTop + totalBands * leadHeight;
+
+    // draw background, same as single lead mode
+    ctx.fillStyle = '#fefefe';
+    ctx.fillRect(paddingLeft, gridTop, maxDisplayX - paddingLeft, gridBottom - gridTop);
+
+    // small grid lines (1mm square, 0.04s, 0.1mV)
+    ctx.strokeStyle = '#ff6b6b';
+    ctx.lineWidth = 0.5;
+    ctx.globalAlpha = 0.7;
+
+    // vertical small grid lines (0.04s step)
+    for (let x = paddingLeft; x <= maxDisplayX; x += smallGridSizeX) {
+      ctx.beginPath();
+      ctx.moveTo(x, gridTop);
+      ctx.lineTo(x, gridBottom);
+      ctx.stroke();
+    }
+
+    // horizontal small grid lines (1mm step)
+    const smallGridSizeYPx = pixelsPerMM;      // 1mm
+    const largeGridSizeYPx = pixelsPerMM * 5;  // 5mm
+    for (let y = gridTop; y <= gridBottom; y += smallGridSizeYPx) {
+      ctx.beginPath();
+      ctx.moveTo(paddingLeft, y);
+      ctx.lineTo(maxDisplayX, y);
+      ctx.stroke();
+    }
+
+    // large grid lines (5mm square, 0.2s, 0.5mV)
+    ctx.strokeStyle = '#ff6b6b';
+    ctx.lineWidth = 1.2;
+    ctx.globalAlpha = 1.0;
+
+    // vertical large grid lines (0.2s step)
+    for (let x = paddingLeft; x <= maxDisplayX; x += largeGridSizeX) {
+      ctx.beginPath();
+      ctx.moveTo(x, gridTop);
+      ctx.lineTo(x, gridBottom);
+      ctx.stroke();
+    }
+
+    // horizontal large grid lines (5mm step)
+    for (let y = gridTop; y <= gridBottom; y += largeGridSizeYPx) {
+      ctx.beginPath();
+      ctx.moveTo(paddingLeft, y);
+      ctx.lineTo(maxDisplayX, y);
+      ctx.stroke();
+    }
+
+    // draw each lead's waveform
+    bands.forEach((band, idx) => {
+      const samples = band.samples;
+      const leadTop = paddingTop + idx * leadHeight;
+      const leadBottom = leadTop + leadHeight;
+      const centerY = leadTop + leadHeight / 2;
+
+      // use fixed voltage range, ±0.5mV
+      const voltageRange = 1.0;
+      const maxDisplayRange = leadHeight / 2 * 0.8;
+      const extendedPixelsPerMV = maxDisplayRange / voltageRange;
+
+      // draw waveform - deep blue
+      ctx.strokeStyle = '#1e40af';
+      ctx.lineWidth = 1.2;
+      ctx.globalAlpha = 1.0;
+      ctx.beginPath();
+
+      const samplesToShow = Math.min(samples.length, displayDuration * samplingRate);
+      for (let i = 0; i < samplesToShow; i++) {
+        const x = paddingLeft + (i / samplingRate) * pixelsPerSecond;
+        const voltage = samples[i] / 1000;
+        const y = centerY - voltage * extendedPixelsPerMV;
+        const clampedY = Math.max(leadTop + 5, Math.min(leadBottom - 5, y));
+
+        if (i === 0) {
+          ctx.moveTo(x, clampedY);
+        } else {
+          ctx.lineTo(x, clampedY);
+        }
+      }
+      ctx.stroke();
+
+      // primary label 
+      ctx.font = 'bold 16px Arial, sans-serif';
+      ctx.fillStyle = band.isReference ? '#dc2626' : '#1f2937';
+      ctx.textAlign = 'left';
+      ctx.fillText(band.label, paddingLeft + 5, leadTop + 20);
+
+      // inner sublabels at 1/4, 2/4, 3/4 positions (aVR/aVL/aVF, V1~V6)
+      if (!band.isReference) {
+        const sublabels = idx === 0 ? ['aVR', 'V1', 'V4'] : idx === 1 ? ['aVL', 'V2', 'V5'] : ['aVF', 'V3', 'V6'];
+        ctx.fillStyle = '#374151';
+        ctx.font = 'bold 12px Arial, sans-serif';
+        ctx.textAlign = 'center';
+        // Place labels at 2.5s, 5.0s, 7.5s (segment boundaries)
+        const t25 = paddingLeft + 2.5 * pixelsPerSecond;
+        const t50 = paddingLeft + 5.0 * pixelsPerSecond;
+        const t75 = paddingLeft + 7.5 * pixelsPerSecond;
+        ctx.fillText(sublabels[0], t25, leadTop + 17);
+        ctx.fillText(sublabels[1], t50, leadTop + 17);
+        ctx.fillText(sublabels[2], t75, leadTop + 17);
+      }
+    });
+
+    // amplitude labels 
+    ctx.font = '10px Arial, sans-serif';
+    ctx.fillStyle = '#374151';
+    ctx.textAlign = 'right';
+
+    ctx.strokeStyle = '#ff6b6b';
+    ctx.lineWidth = 0.3;
+    for (let y = gridTop; y <= gridBottom; y += smallGridSizeYPx) {
+
+      if (((y - gridTop) % largeGridSizeYPx) !== 0) {
+        ctx.beginPath();
+        ctx.moveTo(paddingLeft - 3, y);
+        ctx.lineTo(paddingLeft, y);
+        ctx.stroke();
+      }
+    }
+
+    // time labels
+    ctx.font = '11px Arial, sans-serif';
+    ctx.fillStyle = '#374151';
+    ctx.textAlign = 'center';
+    const lastBottom = paddingTop + totalBands * leadHeight;
+    const timeLabelsY = lastBottom + 18;
+
+    ctx.strokeStyle = '#ff6b6b';
+    ctx.lineWidth = 0.5;
+    for (let t = 0; t <= displayDuration; t += 1) {
+      const x = paddingLeft + t * pixelsPerSecond;
+      if (x <= maxDisplayX) {
+        ctx.beginPath();
+        ctx.moveTo(x, lastBottom);
+        ctx.lineTo(x, lastBottom + 5);
+        ctx.stroke();
+        ctx.fillText(`${t}s`, x, timeLabelsY);
+      }
+    }
+
+    // axis labels
+    ctx.font = 'bold 14px Arial, sans-serif';
+    ctx.fillStyle = '#1f2937';
+    ctx.save();
+    ctx.translate(35, paddingTop + contentHeight / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center';
+    ctx.fillText('Amplitude (mV)', 0, 0);
+    ctx.restore();
+    ctx.textAlign = 'center';
+    ctx.fillText('Time (s)', paddingLeft + contentWidth / 2, timeLabelsY + 20);
+
+    // display parameters
+    ctx.font = 'bold 14px Arial, sans-serif';
+    ctx.fillStyle = '#1f2937';
+    ctx.textAlign = 'left';
+    ctx.fillText(`${samplingRate} Hz   25.0 mm/s   10.0mm/mV`, paddingLeft, gridBottom - 8);
+  }, [waveformData, samplingRate, mmPerSecond, mmPerMV]);
+
+  // Multiple-leads aligned rendering (stacked bands, shared time axis, Lead II reference at bottom)
+  const drawMultipleLeadsAligned = React.useCallback((canvasId, waveformDataToUse = null) => {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    if (canvas.tagName !== 'CANVAS') return;
+
+    const dataToUse = waveformDataToUse || waveformData;
+    if (!dataToUse || dataToUse.length === 0) return;
+
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.getBoundingClientRect();
+
+    const paddingLeft = 100;
+    const paddingBottom = 80;
+    const paddingTop = 60;
+    const paddingRight = 50;
+    const leadSpacing = 16;
+
+    canvas.width = rect.width * window.devicePixelRatio;
+    canvas.height = rect.height * window.devicePixelRatio;
+    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+
+    const contentWidth = rect.width - paddingLeft - paddingRight;
+    const contentHeight = rect.height - paddingTop - paddingBottom;
+
+    const pixelsPerMM = 5;
+    const pixelsPerSecond = mmPerSecond * pixelsPerMM;
+    const pixelsPerMV = mmPerMV * pixelsPerMM;
+
+    const smallGridTime = 0.04; // s
+    const largeGridTime = 0.2;  // s
+    const smallGridVoltage = 0.1; // mV
+    const largeGridVoltage = 0.5; // mV
+
+    const smallGridSizeX = smallGridTime * pixelsPerSecond;
+    const largeGridSizeX = largeGridTime * pixelsPerSecond;
+
+    ctx.fillStyle = '#fefefe';
+    ctx.fillRect(0, 0, rect.width, rect.height);
+
+    const leadDisplayNames = ['Lead I', 'Lead II', 'Lead III', 'aVR', 'aVL', 'aVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6'];
+    const leads12 = dataToUse.slice(0, Math.min(12, dataToUse.length));
+    const allLeads = [...leads12];
+    if (dataToUse[1]) {
+      allLeads.push(dataToUse[1]); // Lead II reference as last band
+    }
+
+    const totalBands = allLeads.length;
+    const leadHeight = (contentHeight - leadSpacing * (totalBands - 1)) / totalBands;
+
+    // Determine display duration (use first lead length)
+    const firstSamples = allLeads[0];
+    const actualDuration = firstSamples.length / samplingRate;
+    const displayDuration = actualDuration >= 10 ? 10 : actualDuration;
+    const maxDisplayX = paddingLeft + displayDuration * pixelsPerSecond;
+
+    allLeads.forEach((samples, idx) => {
+      const leadTop = paddingTop + idx * (leadHeight + leadSpacing);
+      const leadBottom = leadTop + leadHeight;
+      const centerY = leadTop + leadHeight / 2;
+
+      const actualMinVoltage = Math.min(...samples) / 1000;
+      const actualMaxVoltage = Math.max(...samples) / 1000;
+      const minVoltage = Math.min(-1.5, Math.floor(actualMinVoltage / 0.5) * 0.5);
+      const maxVoltage = Math.max(1.5, Math.ceil(actualMaxVoltage / 0.5) * 0.5);
+
+      const gridPaddingFactor = 0.8;
+      const extendedPixelsPerMV = pixelsPerMV * (1 + gridPaddingFactor);
+
+      // Small grid (vertical & horizontal) within this band
+      ctx.strokeStyle = '#ff6b6b';
+      ctx.lineWidth = 0.5;
+      ctx.globalAlpha = 0.7;
+      for (let x = paddingLeft; x <= maxDisplayX; x += smallGridSizeX) {
+        ctx.beginPath(); ctx.moveTo(x, leadTop); ctx.lineTo(x, leadBottom); ctx.stroke();
+      }
+      for (let v = minVoltage; v <= maxVoltage; v += smallGridVoltage) {
+        const y = centerY - v * extendedPixelsPerMV;
+        if (y >= leadTop && y <= leadBottom) { ctx.beginPath(); ctx.moveTo(paddingLeft, y); ctx.lineTo(maxDisplayX, y); ctx.stroke(); }
+      }
+
+      // Large grid
+      ctx.strokeStyle = '#ff6b6b';
+      ctx.lineWidth = 1.2;
+      ctx.globalAlpha = 1.0;
+      for (let x = paddingLeft; x <= maxDisplayX; x += largeGridSizeX) {
+        ctx.beginPath(); ctx.moveTo(x, leadTop); ctx.lineTo(x, leadBottom); ctx.stroke();
+      }
+      for (let v = minVoltage; v <= maxVoltage; v += largeGridVoltage) {
+        const y = centerY - v * extendedPixelsPerMV;
+        if (y >= leadTop && y <= leadBottom) { ctx.beginPath(); ctx.moveTo(paddingLeft, y); ctx.lineTo(maxDisplayX, y); ctx.stroke(); }
+      }
+
+      // Waveform
+      ctx.strokeStyle = '#1a365d';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      const samplesToShow = Math.min(samples.length, displayDuration * samplingRate);
+      for (let i = 0; i < samplesToShow; i++) {
+        const x = paddingLeft + (i / samplingRate) * pixelsPerSecond;
+        const y = centerY - (samples[i] / 1000) * extendedPixelsPerMV;
+        const clampedY = Math.max(leadTop, Math.min(leadBottom, y));
+        if (i === 0) ctx.moveTo(x, clampedY); else ctx.lineTo(x, clampedY);
+      }
+      ctx.stroke();
+
+      // Band borders
+      ctx.strokeStyle = '#ff6b6b';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(paddingLeft, leadTop); ctx.lineTo(maxDisplayX, leadTop);
+      ctx.moveTo(paddingLeft, leadBottom); ctx.lineTo(maxDisplayX, leadBottom);
+      ctx.stroke();
+
+      // Lead label
+      const isReference = (idx === totalBands - 1) && !!dataToUse[1];
+      const label = isReference ? 'Lead II (Reference)' : (leadNames[idx] || leadDisplayNames[idx] || `Lead ${idx + 1}`);
+      ctx.font = 'bold 14px Arial, sans-serif';
+      ctx.fillStyle = isReference ? '#ff6b6b' : '#2d3748';
+      ctx.textAlign = 'left';
+      ctx.fillText(label, paddingLeft + 10, leadTop + 20);
+    });
+
+    // Time labels under the last band
+    ctx.font = '11px Arial, sans-serif';
+    ctx.fillStyle = '#718096';
+    ctx.textAlign = 'center';
+    const lastBottom = paddingTop + (totalBands - 1) * (leadHeight + leadSpacing) + leadHeight;
+    const timeLabelsY = lastBottom + 20;
+    for (let t = 0; t <= displayDuration; t += 0.2) {
+      const x = paddingLeft + t * pixelsPerSecond; if (x <= maxDisplayX) ctx.fillText(t.toFixed(1), x, timeLabelsY);
+    }
+
+    // Axis labels
+    ctx.font = 'bold 13px Arial, sans-serif';
+    ctx.fillStyle = '#2d3748';
+    ctx.save();
+    ctx.translate(35, paddingTop + contentHeight / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center';
+    ctx.fillText('Amplitude (mV)', 0, 0);
+    ctx.restore();
+    ctx.textAlign = 'center';
+    ctx.fillText('Time (s)', paddingLeft + contentWidth / 2, timeLabelsY + 15);
+  }, [waveformData, samplingRate, leadNames, mmPerSecond, mmPerMV]);
+
   // Professional ECG dual leads with Lead II reference 
   const drawDualLeadsWithReference = React.useCallback((canvasId, leadIndices, waveformDataToUse = null) => {
     const canvas = document.getElementById(canvasId);
@@ -1153,7 +1538,7 @@ const ECGViewer = () => {
     const ctx = canvas.getContext('2d');
     const rect = canvas.getBoundingClientRect();
 
-    // 🔥 Three-section layout: two selected leads + Lead II reference
+    // Three-section layout: two selected leads + Lead II reference
     const paddingLeft = 100;
     const paddingBottom = 80;
     const paddingTop = 60;
@@ -1444,20 +1829,22 @@ const ECGViewer = () => {
       const nameView = isMultipleMode ? '' : (leadDisplayNames[leadIndex] || '');
 
       if (isMultipleMode) {
-        // Multiple mode: use DicomECGViewer
-        const viewer = new DicomECGViewer(arrayBuffer, canvasId, 0);
-        viewerRef.current = viewer;
-
-        // Also parse data for comparison of data consistency
+        // Multiple mode: manual aligned rendering across all leads
         const parentByteArray = new Uint8Array(arrayBuffer);
         const parentDataSet = dicomParser.parseDicom(parentByteArray);
         const parsedLeads = parseWaveformData(parentDataSet, parentByteArray, setSamplingRate);
-
-
-        try {
-          await viewer.loadCanvas();
-        } catch (loadError) {
-          setError(`Failed to load canvas: ${loadError.message}`);
+        if (parsedLeads && parsedLeads.length > 0) {
+          setWaveformData(parsedLeads);
+          setLeadNames(['Lead I', 'Lead II', 'Lead III', 'aVR', 'aVL', 'aVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6']);
+          setTimeout(() => {
+            if (displayPreset === '1x10') {
+              drawMultipleLeadsConcatenated(canvasId, parsedLeads);
+            } else {
+              drawMultipleLeadsAligned(canvasId, parsedLeads);
+            }
+          }, 0);
+        } else {
+          setError('No waveform data found for multiple leads rendering');
         }
       } else {
         // Single mode: use simplified manual parsing (implicit length 4 bytes), parse all leads
@@ -1568,7 +1955,18 @@ const ECGViewer = () => {
     }
   }, [waveformData, samplingRate, isMultipleMode, selectedLeads, currentCanvasId, drawSingleLeadWithReference, drawDualLeadsWithReference]);
 
-
+  // Redraw when parameters change in multiple mode
+  React.useEffect(() => {
+    if (waveformData && isMultipleMode && currentCanvasId) {
+      setTimeout(() => {
+        if (displayPreset === '1x10') {
+          drawMultipleLeadsConcatenated(currentCanvasId, waveformData);
+        } else {
+          drawMultipleLeadsAligned(currentCanvasId, waveformData);
+        }
+      }, 0);
+    }
+  }, [waveformData, isMultipleMode, currentCanvasId, mmPerSecond, mmPerMV, displayPreset, drawMultipleLeadsAligned, drawMultipleLeadsConcatenated]);
 
 
   const handleViewConverted = async () => {
@@ -1682,16 +2080,14 @@ const ECGViewer = () => {
 
         {/* ⭐ New addition: Lead selector with checkbox mode */}
         <div>
-          {false && (
-            <div style={{ marginBottom: 12 }}>
-              <Checkbox
-                checked={isMultipleMode}
-                onChange={(e) => handleMultipleModeChange(e.target.checked)}
-              >
-                Multiple (12 leads)
-              </Checkbox>
-            </div>
-          )}
+          <div style={{ marginBottom: 12 }}>
+            <Checkbox
+              checked={isMultipleMode}
+              onChange={(e) => handleMultipleModeChange(e.target.checked)}
+            >
+              Multiple (12 leads)
+            </Checkbox>
+          </div>
 
           {!isMultipleMode && (
             <div>
@@ -1730,36 +2126,6 @@ const ECGViewer = () => {
             </div>
           )}
         </div>
-
-        {/* Weasis-like parameter controls (hidden while multiple leads disabled) */}
-        {false && (
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            <div>
-              <span style={{ marginRight: 8 }}>Speed (mm/s):</span>
-              <Select value={mmPerSecond} style={{ width: 120 }} onChange={setMmPerSecond}>
-                <Option value={25}>25</Option>
-                <Option value={50}>50</Option>
-              </Select>
-            </div>
-            <div>
-              <span style={{ marginRight: 8 }}>Gain (mm/mV):</span>
-              <Select value={mmPerMV} style={{ width: 120 }} onChange={setMmPerMV}>
-                <Option value={5}>5</Option>
-                <Option value={10}>10</Option>
-                <Option value={20}>20</Option>
-              </Select>
-            </div>
-            <div>
-              <span style={{ marginRight: 8 }}>Display format:</span>
-              <Select value={displayPreset} style={{ width: 160 }} onChange={setDisplayPreset}>
-                <Option value="1x10">1 x 10s</Option>
-                <Option value="2x5">2 x 5s</Option>
-                <Option value="4x2.5">4 x 2.5s</Option>
-              </Select>
-            </div>
-          </div>
-        )}
-
 
 
         {error && (
