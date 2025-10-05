@@ -754,25 +754,26 @@ const PatientDetail = () => {
       {/* Resources Summary */}
       {Array.isArray(ecgFiles) && ecgFiles.length > 0 && (
         <Card style={{ marginBottom: 24 }}>
-          <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <DatabaseOutlined style={{ fontSize: 18, color: '#1890ff' }} />
               <div>
-                <div style={{ fontSize: 12, color: '#8c8c8c' }}>ECG Files</div>
+                <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 2 }}>ECG Files</div>
                 <div style={{ fontSize: 16, fontWeight: 600 }}>{ecgFiles.length}</div>
               </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {/* Total Instances section commented out */}
+            {/* <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <NumberOutlined style={{ fontSize: 18, color: '#13c2c2' }} />
               <div>
                 <div style={{ fontSize: 12, color: '#8c8c8c' }}>Total Instances</div>
                 <div style={{ fontSize: 16, fontWeight: 600 }}>{ecgFiles.reduce((sum, f) => sum + (Array.isArray(f.instanceIDs) ? f.instanceIDs.length : 0), 0)}</div>
               </div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            </div> */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <ClockCircleOutlined style={{ fontSize: 18, color: '#faad14' }} />
               <div>
-                <div style={{ fontSize: 12, color: '#8c8c8c' }}>Last Upload (Perth)</div>
+                <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 2 }}>Last Upload (Perth)</div>
                 <div style={{ fontSize: 16, fontWeight: 600 }}>
                   {(() => {
                     const last = ecgFiles
@@ -830,7 +831,7 @@ const PatientDetail = () => {
           className="ecg-file-list"
           loading={loading}
           locale={{ emptyText: loading ? null : 'No data' }}
-          dataSource={ecgFiles}
+          dataSource={ecgFiles.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))}
           renderItem={(file) => (
             <List.Item
             >
@@ -1042,7 +1043,10 @@ const PatientDetail = () => {
                     <List
                       size="small"
                       bordered
-                      dataSource={file.instanceIDs || []}
+                      dataSource={(file.instanceIDs || []).sort((a, b) => {
+                        // If instances have different creation times, sort by creation time
+                        return b.localeCompare(a);
+                      })}
                       renderItem={(instanceId) => (
                         <List.Item
                           actions={[
