@@ -353,9 +353,9 @@ const ECGViewer = () => {
     const rect = canvas.getBoundingClientRect();
 
     // Layout paddings so axes, labels and waveform are fully visible
-    const paddingLeft = 100;
+    const paddingLeft = 55;
     const paddingBottom = 80;
-    const paddingTop = 60;
+    const paddingTop = 35;
     const paddingRight = 50;
 
     const contentWidth = rect.width - paddingLeft - paddingRight;
@@ -541,7 +541,7 @@ const ECGViewer = () => {
     ctx.fillStyle = '#2d3748';
     ctx.font = 'bold 16px Arial, sans-serif';
     ctx.textAlign = 'left';
-    ctx.fillText(leadName, paddingLeft, paddingTop - 15);
+    ctx.fillText(leadName, paddingLeft, paddingTop - 8);
 
     ctx.fillStyle = '#4a5568';
     ctx.font = '11px Arial, sans-serif';
@@ -626,7 +626,7 @@ const ECGViewer = () => {
 
     // Y-axis label (voltage)
     ctx.save();
-    ctx.translate(35, centerY);
+    ctx.translate(30, centerY);
     ctx.rotate(-Math.PI / 2);
     ctx.textAlign = 'center';
     ctx.fillText('Amplitude (mV)', 0, 0);
@@ -662,9 +662,9 @@ const ECGViewer = () => {
     const rect = canvas.getBoundingClientRect();
 
     // Dual lead layout parameters 
-    const paddingLeft = 100;
+    const paddingLeft = 55;
     const paddingBottom = 80;
-    const paddingTop = 60;
+    const paddingTop = 35;
     const paddingRight = 50;
     const leadSpacing = 30;
 
@@ -867,7 +867,7 @@ const ECGViewer = () => {
 
     // Y-axis label (voltage) - centered between leads
     ctx.save();
-    ctx.translate(35, paddingTop + contentHeight / 2);
+    ctx.translate(30, paddingTop + contentHeight / 2);
     ctx.rotate(-Math.PI / 2);
     ctx.textAlign = 'center';
     ctx.fillText('Amplitude (mV)', 0, 0);
@@ -902,9 +902,9 @@ const ECGViewer = () => {
     const rect = canvas.getBoundingClientRect();
 
     // Three-section layout: selected lead + Lead II reference
-    const paddingLeft = 100;
+    const paddingLeft = 55;
     const paddingBottom = 80;
-    const paddingTop = 60;
+    const paddingTop = 35;
     const paddingRight = 50;
     const leadSpacing = 20; // Space between leads
 
@@ -1116,7 +1116,7 @@ const ECGViewer = () => {
 
     // Y-axis label (voltage) - centered between leads
     ctx.save();
-    ctx.translate(35, paddingTop + contentHeight / 2);
+    ctx.translate(30, paddingTop + contentHeight / 2);
     ctx.rotate(-Math.PI / 2);
     ctx.textAlign = 'center';
     ctx.fillText('Amplitude (mV)', 0, 0);
@@ -1140,9 +1140,9 @@ const ECGViewer = () => {
     const ctx = canvas.getContext('2d');
     const rect = canvas.getBoundingClientRect();
 
-    const paddingLeft = 100;
+    const paddingLeft = 55;
     const paddingBottom = 80;
-    const paddingTop = 60;
+    const paddingTop = 35;
     const paddingRight = 50;
     const leadSpacing = 0;
 
@@ -1352,7 +1352,7 @@ const ECGViewer = () => {
     ctx.font = 'bold 14px Arial, sans-serif';
     ctx.fillStyle = '#1f2937';
     ctx.save();
-    ctx.translate(35, paddingTop + contentHeight / 2);
+    ctx.translate(30, paddingTop + contentHeight / 2);
     ctx.rotate(-Math.PI / 2);
     ctx.textAlign = 'center';
     ctx.fillText('Amplitude (mV)', 0, 0);
@@ -1379,9 +1379,9 @@ const ECGViewer = () => {
     const ctx = canvas.getContext('2d');
     const rect = canvas.getBoundingClientRect();
 
-    const paddingLeft = 100;
+    const paddingLeft = 55;
     const paddingBottom = 80;
-    const paddingTop = 60;
+    const paddingTop = 35;
     const paddingRight = 50;
     const leadSpacing = 16;
 
@@ -1505,7 +1505,7 @@ const ECGViewer = () => {
     ctx.font = 'bold 13px Arial, sans-serif';
     ctx.fillStyle = '#2d3748';
     ctx.save();
-    ctx.translate(35, paddingTop + contentHeight / 2);
+    ctx.translate(30, paddingTop + contentHeight / 2);
     ctx.rotate(-Math.PI / 2);
     ctx.textAlign = 'center';
     ctx.fillText('Amplitude (mV)', 0, 0);
@@ -1539,9 +1539,9 @@ const ECGViewer = () => {
     const rect = canvas.getBoundingClientRect();
 
     // Three-section layout: two selected leads + Lead II reference
-    const paddingLeft = 100;
+    const paddingLeft = 55;
     const paddingBottom = 80;
-    const paddingTop = 60;
+    const paddingTop = 35;
     const paddingRight = 50;
     const leadSpacing = 20; // Space between leads
 
@@ -1753,7 +1753,7 @@ const ECGViewer = () => {
 
     // Y-axis label (voltage) - centered between all leads
     ctx.save();
-    ctx.translate(35, paddingTop + contentHeight / 2);
+    ctx.translate(30, paddingTop + contentHeight / 2);
     ctx.rotate(-Math.PI / 2);
     ctx.textAlign = 'center';
     ctx.fillText('Amplitude (mV)', 0, 0);
@@ -1796,11 +1796,34 @@ const ECGViewer = () => {
       const canvas = document.createElement('canvas');
       const canvasId = 'ecg-canvas-' + Date.now();
       canvas.id = canvasId;
-      canvas.style.width = '100%';
+
+      // Calculate required width for 10 seconds of ECG data
+      const pixelsPerSecond = 25 * 5; // 25 mm/s * 5 px/mm = 125 px/s
+      const paddingLeft = 55;
+      const paddingRight = 50;
+      const requiredWidth = paddingLeft + (10 * pixelsPerSecond) + paddingRight; // 10 seconds = 1405px
+
+      // Get container width to determine if scrolling is needed
+      const containerWidth = container.clientWidth;
+
+      // Set canvas width: use full container width if it's larger than required,
+      // otherwise use required width to enable scrolling
+      const canvasWidth = Math.max(requiredWidth, containerWidth);
+      canvas.style.width = `${canvasWidth}px`;
+
+      // Debug: Log dimensions for troubleshooting
+      console.log('ECG Canvas Debug:', {
+        containerWidth,
+        requiredWidth,
+        canvasWidth,
+        willNeedScroll: canvasWidth > containerWidth,
+        pixelsPerSecond,
+        tenSecondsWidth: 10 * pixelsPerSecond
+      });
 
       // Adjust height based on lead selection - dynamic calculation
       if (isMultipleMode) {
-        canvas.style.height = '100%'; // Full height for multiple leads
+        canvas.style.height = '100%'; // Full height for multiple leads - let rendering function handle lead spacing
       } else {
         // Calculate height based on number of leads (selected + Lead II reference)
         const totalLeads = selectedLeads.length + 1; // +1 for Lead II reference
@@ -1967,6 +1990,25 @@ const ECGViewer = () => {
       }, 0);
     }
   }, [waveformData, isMultipleMode, currentCanvasId, mmPerSecond, mmPerMV, displayPreset, drawMultipleLeadsAligned, drawMultipleLeadsConcatenated]);
+
+  // Handle window resize to recalculate canvas dimensions
+  React.useEffect(() => {
+    const handleResize = () => {
+      if (currentCanvasId && dicomArrayBuffer) {
+        // Debounce resize events
+        clearTimeout(window.resizeTimeout);
+        window.resizeTimeout = setTimeout(() => {
+          loadDicomFile(dicomArrayBuffer);
+        }, 100);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      clearTimeout(window.resizeTimeout);
+    };
+  }, [currentCanvasId, dicomArrayBuffer, loadDicomFile]);
 
 
   const handleViewConverted = async () => {
@@ -2160,7 +2202,8 @@ const ECGViewer = () => {
             width: '100%',
             border: '1px solid #f0f0f0',
             borderRadius: '8px',
-            overflow: 'hidden',
+            overflowY: 'auto',
+            overflowX: 'auto',
             backgroundColor: '#fafafa'
           }}
         />
