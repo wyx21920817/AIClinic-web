@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { Card, Typography, Button, Spin, Alert, Row, Col, Divider, Tag, Space, Tabs, Image, Form, Input, List, message, Modal, Table } from 'antd';
+import { Card, Typography, Button, Spin, Alert, Row, Col, Divider, Tag, Space, Tabs, Image, Form, Input, List, message, Modal, Table, Statistic } from 'antd';
 import { ArrowLeftOutlined, DownloadOutlined } from '@ant-design/icons';
 import { aiDiagnosisAPI, ecgAPI, feedbackAPI } from '../services/api/ecg';
 
@@ -18,6 +18,36 @@ const formatReportText = (text) => {
     // Clean up any excessive line breaks
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+};
+
+// Pretty print snake_case keys and attach common units for readability
+const prettyLabel = (key) => String(key || '')
+  .replace(/_/g, ' ')
+  .replace(/\b([a-z])/g, (m, c) => c.toUpperCase());
+
+const valueWithUnit = (key, value) => {
+  if (value === null || value === undefined) return '' + value;
+  const n = Number(value);
+  const isNum = !Number.isNaN(n);
+  const fmt = (v) => {
+    if (!isNum) return String(value);
+    if (Math.abs(n) >= 100) return n.toFixed(0);
+    if (Math.abs(n) >= 10) return n.toFixed(1);
+    if (Math.abs(n) >= 1) return n.toFixed(2);
+    return n.toFixed(3);
+  };
+  const unitsByKey = {
+    average_heart_rate_bpm: ' bpm',
+    rr_cv: '',
+    pr_mean_s: ' s',
+    pr_min_s: ' s',
+    pr_max_s: ' s'
+  };
+  if (Object.prototype.hasOwnProperty.call(unitsByKey, key)) return `${fmt(n)}${unitsByKey[key]}`;
+  if (/_bpm$/.test(key)) return `${fmt(n)} bpm`;
+  if (/_ms$/.test(key)) return `${fmt(n)} ms`;
+  if (/_s$/.test(key)) return `${fmt(n)} s`;
+  return isNum ? fmt(n) : String(value);
 };
 
 const XAIResultPage = () => {
@@ -338,40 +368,101 @@ const XAIResultPage = () => {
     }
 
     const { report } = result;
+    const statistics = result.statistics || report.statistics;
     
     return (
       <div>
         <Row gutter={[16, 16]}>
+          {/* Summary (new) */}
+          {report.summary && (
+            <Col span={24}>
+              <Card type="inner" title="Summary">
+                <div style={{ whiteSpace: 'pre-line' }}>
+                  <Text>
+                    {typeof report.summary.report_text === 'string'
+                      ? report.summary.report_text
+                      : JSON.stringify(report.summary)}
+                  </Text>
+                </div>
+                <div style={{ marginTop: 12, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                  {typeof report.summary.is_abnormality_present === 'boolean' && (
+                    <Tag color={report.summary.is_abnormality_present ? 'red' : 'green'}>
+                      {report.summary.is_abnormality_present ? 'Abnormality Present' : 'No Abnormality'}
+                    </Tag>
+                  )}
+                  {typeof report.summary.abnormality_count === 'number' && (
+                    <Tag color="blue">Abnormality Count: {report.summary.abnormality_count}</Tag>
+                  )}
+                </div>
+              </Card>
+            </Col>
+          )}
+
           <Col span={24}>
-            <Card type="inner" title="Disease Information">
+            <Card type="inner" title="Detailed Report">
               <Title level={4}>
                 {result.abnormality}
                 <Tag color={result.status === 'ok' ? 'green' : 'orange'} style={{ marginLeft: '8px' }}>
                   {result.status || 'N/A'}
                 </Tag>
               </Title>
-              <div 
-                style={{ 
-                  whiteSpace: 'pre-line',
-                  fontFamily: 'monospace',
-                  fontSize: '14px',
-                  lineHeight: '1.6',
-                  backgroundColor: '#f9f9f9',
-                  padding: '16px',
-                  borderRadius: '4px',
-                  border: '1px solid #e8e8e8'
-                }}
-              >
-                {typeof report.report_text === 'string' 
-                  ? formatReportText(report.report_text)
-                  : typeof report.report_text === 'object' 
-                    ? JSON.stringify(report.report_text) 
-                    : 'No description available'
-                }
-              </div>
+              {Array.isArray(report.report_text) ? (
+                <div>
+                  {report.report_text.map((sec, idx) => (
+                    <Card key={idx} size="small" style={{ marginBottom: 8 }}>
+                      {sec?.section_title && (
+                        <Title level={5} style={{ marginTop: 0 }}>{sec.section_title}</Title>
+                      )}
+                      {sec?.content && (
+                        <div style={{ whiteSpace: 'pre-line' }}>
+                          <Text>{sec.content}</Text>
+                        </div>
+                      )}
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <div 
+                  style={{ 
+                    whiteSpace: 'pre-line',
+                    fontFamily: 'monospace',
+                    fontSize: '14px',
+                    lineHeight: '1.6',
+                    backgroundColor: '#f9f9f9',
+                    padding: '16px',
+                    borderRadius: '4px',
+                    border: '1px solid #e8e8e8'
+                  }}
+                >
+                  {typeof report.report_text === 'string' 
+                    ? formatReportText(report.report_text)
+                    : typeof report.report_text === 'object' 
+                      ? JSON.stringify(report.report_text) 
+                      : 'No description available'
+                  }
+                </div>
+              )}
             </Card>
           </Col>
           
+          {/* Statistics (new) */}
+          {statistics && (
+            <Col span={24}>
+              <Card type="inner" title="Statistics">
+                <Row gutter={[16, 16]}>
+                  {Object.entries(statistics).map(([key, val]) => (
+                    <Col key={key} xs={24} sm={12} md={8} lg={6}>
+                      <Card size="small">
+                        <Text strong>{prettyLabel(key)}: </Text>
+                        <Text>{valueWithUnit(key, val)}</Text>
+                      </Card>
+                    </Col>
+                  ))}
+                </Row>
+              </Card>
+            </Col>
+          )}
+
           {report.metrics && (
             <Col span={24}>
               <Card type="inner" title="Metrics">

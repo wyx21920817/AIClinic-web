@@ -77,12 +77,45 @@ const Login = () => {
       formData.append('mfa_code', values.mfa_code);
 
       const response = await authApi.verifyMfa(formData);
-      localStorage.setItem('token', response.access_token);
-      localStorage.setItem('userData', JSON.stringify({
-        username: response.username,
-        role: response.role,
-        user_id: response.user_id
-      }));
+
+      // Support multiple possible response shapes
+      let token = null;
+      let userData = {
+        username,
+        role: undefined,
+        user_id: undefined,
+      };
+
+      if (typeof response === 'string') {
+        // Backend returned raw token string
+        token = response;
+      } else if (response && typeof response === 'object') {
+        token = response.access_token || response.token || null;
+        userData.username = response.username || userData.username;
+        userData.role = response.role ?? userData.role;
+        userData.user_id = response.user_id ?? userData.user_id;
+      }
+
+      if (!token) {
+        throw new Error('Login succeeded but token missing in response');
+      }
+
+      localStorage.setItem('token', token);
+
+      // If role/ids missing, try deriving from JWT
+      try {
+        const { getUserDataFromToken } = await import('../../utils/jwt');
+        const derived = getUserDataFromToken(token);
+        userData = {
+          username: userData.username || derived.username,
+          role: userData.role || derived.role,
+          user_id: userData.user_id || derived.user_id,
+        };
+      } catch (_) {
+        // Best-effort; continue with what we have
+      }
+
+      localStorage.setItem('userData', JSON.stringify(userData));
       message.success('Login successful');
       try {
         const { getUserRole } = await import('../../utils/jwt');

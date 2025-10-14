@@ -25,8 +25,8 @@ api.interceptors.request.use(
     if (needsAuth) {
       const token = localStorage.getItem('token');
       if (!token) {
-        // If token is required but not present, redirect to login page
-        window.location.href = '/login';
+        // If token is required but not present, redirect to login page (HashRouter)
+        window.location.hash = '#/login';
         throw new Error('No token available');
       }
       // Ensure headers object exists
@@ -58,9 +58,9 @@ api.interceptors.response.use(
       // Handle specific error codes
       switch (error.response.status) {
         case 401:
-          // Unauthorized - clear token and redirect to login
+          // Unauthorized - clear token and redirect to login (HashRouter)
           localStorage.removeItem('token');
-          window.location.href = '/login';
+          window.location.hash = '#/login';
           break;
         case 403:
           // Forbidden

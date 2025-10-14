@@ -1,5 +1,6 @@
 import request from './request';
 import { API_ENDPOINTS } from './config';
+import { getUserDataFromToken } from '../../utils/jwt';
 
 export const authApi = {
   // Login step 1 - Password verification
@@ -27,8 +28,16 @@ export const authApi = {
     }),
 
   // Verify token
-  verifyToken: () => 
-    request.post(API_ENDPOINTS.VERIFY_TOKEN),
+  verifyToken: async () => {
+    const resp = await request.post(API_ENDPOINTS.VERIFY_TOKEN);
+    // Always attach username derived from JWT if backend omits it
+    const { username } = getUserDataFromToken();
+    if (resp && typeof resp === 'object') {
+      return { ...resp, username: resp.username || username };
+    }
+    // For non-object responses (e.g., "ok"), return a normalized shape
+    return { ok: !!resp, username };
+  },
 
   // Get temporary token
   getTempToken: () => 
