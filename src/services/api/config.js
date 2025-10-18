@@ -1,4 +1,4 @@
-// 配置 API 地址 - 从环境变量中读取
+// API base URL and chat API URL
 export const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://54.79.181.49:8000';
 export const CHAT_API_URL = process.env.REACT_APP_CHAT_API_URL || 'http://54.79.181.49:8888';
 

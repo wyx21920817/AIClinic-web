@@ -34,7 +34,7 @@ const AddDoctor = () => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [existingUser, setExistingUser] = useState(null);
 
-  // Check if we're in edit mode
+  // Check if user is in edit mode
   useEffect(() => {
     if (id) {
       setIsEditMode(true);

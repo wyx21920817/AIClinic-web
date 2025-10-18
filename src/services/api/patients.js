@@ -166,10 +166,14 @@ export const patientsApi = {
   // Search patients from Orthanc server
   searchOrthancPatients: async (query) => {
     try {
-      const response = await request.get('/api/orthanc/patients/search', { params: { query } });
+      const response = await request.get('/api/orthanc/patients/search', {
+        params: { query },
+        timeout: 10000 // Add timeout to prevent hanging requests
+      });
       return response || { patients: [] };
     } catch (error) {
       console.error('Error searching Orthanc patients:', error);
+      // Return a consistent structure even on error
       return { patients: [] };
     }
   },

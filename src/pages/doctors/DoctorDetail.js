@@ -28,7 +28,7 @@ const HeaderSection = styled.div`
   }
 `;
 
-const UserDetail = () => {
+const DoctorDetail = () => {
   const { userId } = useParams();
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
@@ -83,8 +83,8 @@ const UserDetail = () => {
     <PageContainer>
       <StyledCard>
         <HeaderSection>
-          <Button 
-            icon={<ArrowLeftOutlined />} 
+          <Button
+            icon={<ArrowLeftOutlined />}
             onClick={handleBack}
             className="back-button"
           >
@@ -122,7 +122,7 @@ const UserDetail = () => {
             </Descriptions>
 
             <Space style={{ marginTop: '24px' }}>
-              <Button 
+              <Button
                 type="primary"
                 onClick={() => navigate(`/doctors/edit/${user.id}`)}
               >
@@ -136,4 +136,4 @@ const UserDetail = () => {
   );
 };
 
-export default UserDetail;
+export default DoctorDetail;

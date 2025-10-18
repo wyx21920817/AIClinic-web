@@ -125,15 +125,15 @@ const PatientList = () => {
           }));
           setPatients(formattedPatients);
           setPagination({
-            current: 1,
-            pageSize: 10,
+            current: page,
+            pageSize: pageSize,
             total: formattedPatients.length
           });
         } else {
           setPatients([]);
           setPagination({
-            current: 1,
-            pageSize: 10,
+            current: page,
+            pageSize: pageSize,
             total: 0
           });
         }
@@ -158,7 +158,19 @@ const PatientList = () => {
 
   // Handle pagination change
   const handlePageChange = (page, pageSize) => {
-    fetchPatients(page, pageSize);
+    // For Orthanc search, we need to handle pagination differently
+    if (searchSource === 'orthanc') {
+      // For Orthanc, we can't do server-side pagination easily
+      // So we'll just update the pagination state for client-side pagination
+      setPagination(prev => ({
+        ...prev,
+        current: page,
+        pageSize: pageSize
+      }));
+    } else {
+      // For local database, use server-side pagination
+      fetchPatients(page, pageSize);
+    }
   };
 
   // Handle search source change

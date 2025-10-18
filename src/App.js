@@ -12,14 +12,11 @@ import PrivateRoute from './components/PrivateRoute';
 import AuthRoute from './components/AuthRoute';
 import ECGViewer from './components/ECGViewer';
 import Account from './pages/account/Account';
-import UserDetail from './pages/doctors/UserDetail';
-import SimpleTest from './pages/SimpleTest';
+import DoctorDetail from './pages/doctors/DoctorDetail';
 import AIEngineShowcase from './pages/AIEngineShowcase';
 import XAIResultPage from './pages/XAIResultPage';
 import AuditLogsEnhanced from './pages/AuditLogsEnhanced';
-// import AIECGResultsDemo from './pages/AIECGResultsDemo';
 import RoleTest from './pages/RoleTest';
-import APITest from './pages/APITest';
 // import OrthancPatientList from './pages/patients/OrthancPatientList';
 import './App.css';
 
@@ -40,18 +37,16 @@ function App() {
             <Route path="doctors" element={<DoctorList />} />
             <Route path="doctors/add" element={<AddDoctor />} />
             <Route path="doctors/edit/:id" element={<AddDoctor />} />
-            <Route path="doctors/:userId" element={<UserDetail />} />
+            <Route path="doctors/:userId" element={<DoctorDetail />} />
             <Route path="account" element={<Account />} />
             {/* Test Deliverables demo removed */}
             <Route path="audit-logs" element={<PrivateRoute allowedRoles={['admin']} />}>
               <Route index element={<AuditLogsEnhanced />} />
             </Route>
             {/* ECG AI Results Demo removed */}
-            <Route path="simple-test" element={<SimpleTest />} />
             <Route path="ai-engine-showcase" element={<AIEngineShowcase />} />
             <Route path="xai/:instanceId" element={<XAIResultPage />} />
             <Route path="role-test" element={<RoleTest />} />
-            <Route path="api-test" element={<APITest />} />
             <Route path="doctor-home" element={<PrivateRoute allowedRoles={['doctor']} />}>
               <Route index element={<div>Doctor Home</div>} />
             </Route>

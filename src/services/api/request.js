@@ -41,8 +41,11 @@ api.interceptors.request.use(
       config.headers['Accept'] = '*/*';
     }
 
-    console.log('Request interceptor - Config:', config);
-    console.log('Request interceptor - Final headers:', config.headers);
+    // Only log in development mode to avoid console spam
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Request interceptor - Config:', config);
+      console.log('Request interceptor - Final headers:', config.headers);
+    }
     return config;
   },
   (error) => {
