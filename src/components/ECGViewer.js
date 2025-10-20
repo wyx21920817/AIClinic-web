@@ -3,13 +3,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { DicomECGViewer } from 'ecg-dicom-web-viewer';
 import dicomParser from 'dicom-parser';
 import { Card, Space, Typography, Upload, Progress, Row, Col, Button, message, Select, Checkbox } from 'antd';
-import { InboxOutlined, FileImageOutlined, ArrowLeftOutlined, ExperimentOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, ExperimentOutlined } from '@ant-design/icons';
 import request from '../services/api/request';
 import { API_ENDPOINTS } from '../services/api/config';
 
-const { Title } = Typography;
-const { Dragger } = Upload;
-const { Option } = Select;
+
 
 // DICOM tag description mapping
 const DICOM_TAG_DESCRIPTIONS = {
@@ -146,16 +144,13 @@ const ECGViewer = () => {
     const transferSyntax = dataSet.string('x00020010') || '';
     const isExplicitVR = transferSyntax.includes('1.2.840.10008.1.2.1');
 
-
     let channelCount = 12;
     let samplingRate = 500;
     let samplesPerChannel = 0;
 
-
     if (waveformSeq.items.length > 0) {
       const firstItem = waveformSeq.items[0];
       const itemData = byteArray.slice(firstItem.dataOffset, firstItem.dataOffset + firstItem.length);
-
 
       let offset = 0;
       while (offset + 8 <= itemData.length) {
@@ -171,11 +166,9 @@ const ECGViewer = () => {
       }
     }
 
-
     channelCount = dataSet.intString('x003a0001') || 12;
     samplingRate = dataSet.intString('x003a0005') || 500;
     samplesPerChannel = dataSet.intString('x003a0010') || 0;
-
 
     const accumPerLead = Array.from({ length: channelCount }, () => []); // number[] per lead
 
@@ -249,7 +242,7 @@ const ECGViewer = () => {
         offset = next;
       }
 
-      // Fallback: Some parsers mount dataSet on item, can directly read element offset
+
       // Only execute if this item hasn't been decoded via the primary path above
       if (!decodedThisItem && item.dataSet && item.dataSet.elements) {
         const el = item.dataSet.elements['x54001010'];
@@ -302,11 +295,8 @@ const ECGViewer = () => {
       const actualSamples = Math.min(...allLeads.map(l => l.length));
       const actualDuration = actualSamples / samplingRate;
 
-
-
       if (actualDuration < 10) {
         const originalSamplingRate = samplingRate;
-
 
         const samplingRateOptions = [500, 400, 250, 100];
         let newSamplingRate = 100;
@@ -330,315 +320,8 @@ const ECGViewer = () => {
     return allLeads;
   }, []);
 
-  // Single-lead ECG rendering
 
-  const drawSingleLead = React.useCallback((canvasId, leadIndex, waveformDataToUse = null) => {
-    const canvas = document.getElementById(canvasId);
-    if (!canvas) {
-      return;
-    }
-
-    if (canvas.tagName !== 'CANVAS') {
-      return;
-    }
-
-    const dataToUse = waveformDataToUse || waveformData;
-    if (!dataToUse || !dataToUse[leadIndex]) {
-      return;
-    }
-
-    const samples = dataToUse[leadIndex];
-
-    const ctx = canvas.getContext('2d');
-    const rect = canvas.getBoundingClientRect();
-
-    // Layout paddings so axes, labels and waveform are fully visible
-    const paddingLeft = 55;
-    const paddingBottom = 80;
-    const paddingTop = 35;
-    const paddingRight = 50;
-
-    const contentWidth = rect.width - paddingLeft - paddingRight;
-    const contentHeight = rect.height - paddingTop - paddingBottom;
-
-    canvas.width = rect.width * window.devicePixelRatio;
-    canvas.height = rect.height * window.devicePixelRatio;
-    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-    ctx.clearRect(0, 0, rect.width, rect.height);
-
-
-    const pixelsPerMM = 5;
-    const pixelsPerSecond = mmPerSecond * pixelsPerMM; // 25 mm/s * 5 px/mm = 125 px/s
-    const pixelsPerMV = mmPerMV * pixelsPerMM;         // 10 mm/mV * 5 px/mm = 50 px/mV
-
-
-    const smallGridTime = 0.04;
-    const largeGridTime = 0.2;
-    const smallGridVoltage = 0.1;
-    const largeGridVoltage = 0.5;
-
-    const smallGridSizeX = smallGridTime * pixelsPerSecond; // 0.04 s → 5 px
-    const largeGridSizeX = largeGridTime * pixelsPerSecond; // 0.2 s → 25 px
-    const smallGridSizeY = smallGridVoltage * pixelsPerMV;  // 0.1 mV → 5 px
-    const largeGridSizeY = largeGridVoltage * pixelsPerMV;  // 0.5 mV → 25 px
-
-
-    ctx.fillStyle = '#fefefe';
-    ctx.fillRect(0, 0, rect.width, rect.height);
-
-
-    const actualDuration = samples.length / samplingRate;
-    let targetDuration = 10;
-    let displayDuration = targetDuration;
-
-
-    if (actualDuration < 10) {
-      displayDuration = actualDuration;
-    } else if (actualDuration > 10) {
-      displayDuration = 10;
-    }
-
-    const maxDisplayX = paddingLeft + displayDuration * pixelsPerSecond;
-
-    const requiredWidth = maxDisplayX + paddingRight;
-    const actualWidth = rect.width;
-
-    const centerY = paddingTop + contentHeight / 2;
-
-    // Compute actual voltage range from raw data
-    const actualMinVoltage = Math.min(...samples) / 1000; // convert to mV
-    const actualMaxVoltage = Math.max(...samples) / 1000; // convert to mV
-
-    // Choose min/max bounds using data-driven thresholds
-    let minVoltage, maxVoltage;
-
-    // Floor to 0.5 mV steps with a minimum of -1.5 mV
-    minVoltage = Math.min(-1.5, Math.floor(actualMinVoltage / 0.5) * 0.5);
-
-    // Ceil to 0.5 mV steps with a minimum of +1.5 mV
-    maxVoltage = Math.max(1.5, Math.ceil(actualMaxVoltage / 0.5) * 0.5);
-
-    // Voltage range used for grid rendering
-    const voltageRange = Math.max(Math.abs(minVoltage), maxVoltage);
-
-    const gridPaddingFactor = 0.8;
-    const extendedPixelsPerMV = pixelsPerMV * (1 + gridPaddingFactor);
-
-    // Compute display Y range using bounds and clamp to canvas
-    const minDisplayY = Math.max(paddingTop, centerY - (maxVoltage * extendedPixelsPerMV));
-    const maxDisplayY = Math.min(rect.height - paddingBottom, centerY - (minVoltage * extendedPixelsPerMV));
-
-
-
-    ctx.strokeStyle = '#ff6b6b';
-    ctx.lineWidth = 0.5;
-    ctx.globalAlpha = 0.7;
-
-    // Small vertical grid (0.04 s)
-    for (let x = paddingLeft; x <= maxDisplayX; x += smallGridSizeX) {
-      ctx.beginPath();
-      ctx.moveTo(x, minDisplayY);
-      ctx.lineTo(x, maxDisplayY);
-      ctx.stroke();
-    }
-
-
-    const extendedSmallGridSizeY = smallGridVoltage * extendedPixelsPerMV;
-
-    for (let voltage = minVoltage; voltage <= maxVoltage; voltage += smallGridVoltage) {
-      const y = centerY - (voltage * extendedPixelsPerMV);
-      if (y >= minDisplayY && y <= maxDisplayY) {
-        ctx.beginPath();
-        ctx.moveTo(paddingLeft, y);
-        ctx.lineTo(maxDisplayX, y);
-        ctx.stroke();
-      }
-    }
-
-
-    ctx.strokeStyle = '#ff6b6b';
-    ctx.lineWidth = 1.2;
-    ctx.globalAlpha = 1.0;
-
-
-    for (let x = paddingLeft; x <= maxDisplayX; x += largeGridSizeX) {
-      ctx.beginPath();
-      ctx.moveTo(x, minDisplayY);
-      ctx.lineTo(x, maxDisplayY);
-      ctx.stroke();
-    }
-
-    for (let voltage = minVoltage; voltage <= maxVoltage; voltage += largeGridVoltage) {
-      const y = centerY - (voltage * extendedPixelsPerMV);
-      if (y >= minDisplayY && y <= maxDisplayY) {
-        ctx.beginPath();
-        ctx.moveTo(paddingLeft, y);
-        ctx.lineTo(maxDisplayX, y);
-        ctx.stroke();
-      }
-    }
-
-
-    ctx.globalAlpha = 1.0;
-
-
-    ctx.beginPath();
-    ctx.strokeStyle = '#1a365d';
-    ctx.lineWidth = 1.5;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-
-    let hasMoved = false;
-
-    for (let i = 0; i < samples.length; i++) {
-
-      const t = i / samplingRate;
-      const x = paddingLeft + t * pixelsPerSecond;
-
-
-      if (x > maxDisplayX) break;
-
-
-      const voltageMV = samples[i] / 1000;
-      const y = centerY - (voltageMV * extendedPixelsPerMV);
-
-      const clampedY = Math.max(minDisplayY, Math.min(maxDisplayY, y));
-
-      if (!hasMoved) {
-        ctx.moveTo(x, clampedY);
-        hasMoved = true;
-      } else {
-        ctx.lineTo(x, clampedY);
-      }
-    }
-    ctx.stroke();
-
-    // Draw lead borders (top and bottom)
-    ctx.strokeStyle = '#ff6b6b';
-    ctx.lineWidth = 1.2;
-    ctx.globalAlpha = 1.0;
-    ctx.beginPath();
-    // Top border
-    ctx.moveTo(paddingLeft, minDisplayY);
-    ctx.lineTo(maxDisplayX, minDisplayY);
-    // Bottom border
-    ctx.moveTo(paddingLeft, maxDisplayY);
-    ctx.lineTo(maxDisplayX, maxDisplayY);
-    ctx.stroke();
-
-    // Add baseline reference line - finer dashed line, only in data area
-    ctx.strokeStyle = '#ff6b6b';
-    ctx.lineWidth = 0.5;
-    ctx.setLineDash([3, 3]);
-    ctx.beginPath();
-    ctx.moveTo(paddingLeft, centerY);
-    ctx.lineTo(maxDisplayX, centerY);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // Lead label - more professional style
-    const leadName = leadNames[leadIndex] || `Lead ${leadIndex + 1}`;
-    ctx.fillStyle = '#2d3748';
-    ctx.font = 'bold 16px Arial, sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText(leadName, paddingLeft, paddingTop - 8);
-
-    ctx.fillStyle = '#4a5568';
-    ctx.font = '11px Arial, sans-serif';
-    ctx.textAlign = 'center';
-
-    const timeScaleY = rect.height - paddingBottom + 5;
-
-    const timeInterval = 0.2;
-    const maxTime = displayDuration;
-
-    // Draw time labels along the X-axis
-    ctx.strokeStyle = '#4a5568';
-    ctx.lineWidth = 1;
-    ctx.fillStyle = '#4a5568';
-    ctx.font = '11px Arial, sans-serif';
-    ctx.textAlign = 'center';
-
-    for (let t = 0; t <= maxTime; t += timeInterval) {
-      const x = paddingLeft + t * pixelsPerSecond;
-
-      if (x >= paddingLeft && x <= maxDisplayX) {
-
-        const timeLabel = t.toFixed(1);
-        ctx.fillText(timeLabel, x, maxDisplayY + 10);
-      }
-    }
-
-    ctx.textAlign = 'right';
-    ctx.font = '11px Arial, sans-serif';
-
-    const voltageScaleX = 45;
-
-    ctx.strokeStyle = '#4a5568';
-    ctx.lineWidth = 1;
-
-    // Draw voltage tick labels using computed range
-    for (let voltage = minVoltage; voltage <= maxVoltage; voltage += 0.5) { // 0.5mV间隔
-      const y = centerY - (voltage * extendedPixelsPerMV);
-
-      // Only render labels within visible band
-      if (y >= minDisplayY && y <= maxDisplayY) {
-        // Voltage tick mark
-        ctx.beginPath();
-        ctx.moveTo(paddingLeft - 6, y);
-        ctx.lineTo(paddingLeft, y);
-        ctx.stroke();
-
-        // Voltage tick label
-        const voltageText = voltage === 0 ? '0' :
-          voltage > 0 ? `+${voltage.toFixed(1)}` :
-            `${voltage.toFixed(1)}`;
-        ctx.fillText(voltageText, paddingLeft - 10, y + 3);
-      }
-    }
-
-    // Mark small grid lines (every 0.1mV interval)
-    ctx.strokeStyle = '#ff6b6b';
-    ctx.lineWidth = 0.3;
-    for (let voltage = -voltageRange; voltage <= voltageRange; voltage += 0.1) { // 0.1mV interval
-      const y = centerY - (voltage * extendedPixelsPerMV);
-
-      // Only draw markings within 1.5mV range and not large grid lines
-      if (y >= minDisplayY && y <= maxDisplayY && Math.abs(voltage % 0.5) > 0.01) {
-        ctx.beginPath();
-        ctx.moveTo(paddingLeft - 3, y);
-        ctx.lineTo(paddingLeft, y);
-        ctx.stroke();
-      }
-    }
-
-    // Draw special marking for baseline (0mV)
-    ctx.beginPath();
-    ctx.moveTo(paddingLeft - 6, centerY);
-    ctx.lineTo(paddingLeft, centerY);
-    ctx.strokeStyle = '#ff6b6b';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
-    // Add axis labels - more professional style
-    ctx.font = 'bold 13px Arial, sans-serif';
-    ctx.fillStyle = '#2d3748';
-
-    // Y-axis label (voltage)
-    ctx.save();
-    ctx.translate(30, centerY);
-    ctx.rotate(-Math.PI / 2);
-    ctx.textAlign = 'center';
-    ctx.fillText('Amplitude (mV)', 0, 0);
-    ctx.restore();
-
-    // X-axis label (time) at the bottom
-    ctx.textAlign = 'center';
-    ctx.fillText('Time (s)', paddingLeft + contentWidth / 2, rect.height - 20);
-
-  }, [waveformData, samplingRate, leadNames, mmPerSecond, mmPerMV]);
-
-  // Professional ECG dual leads rendering - reference the image style
+  // Professional ECG dual leads rendering - reference the image style (UNUSED - replaced by drawDualLeadsWithReference)
   const drawDualLeads = React.useCallback((canvasId, leadIndices, waveformDataToUse = null) => {
     const canvas = document.getElementById(canvasId);
     if (!canvas) {
@@ -717,20 +400,17 @@ const ECGViewer = () => {
       const centerY = leadTop + leadHeight / 2;
 
       // Calculate voltage range for this lead
-      const actualMinVoltage = Math.min(...samples) / 1000;
-      const actualMaxVoltage = Math.max(...samples) / 1000;
+      const actualMinVoltage = Math.min(...samples) / 1000; // convert to mV
+      const actualMaxVoltage = Math.max(...samples) / 1000; // convert to mV
 
       let minVoltage, maxVoltage;
       minVoltage = Math.min(-1.5, Math.floor(actualMinVoltage / 0.5) * 0.5);
       maxVoltage = Math.max(1.5, Math.ceil(actualMaxVoltage / 0.5) * 0.5);
 
-      const voltageRange = Math.max(Math.abs(minVoltage), maxVoltage);
-      const gridPaddingFactor = 0.8;
+      // For single/dual lead mode, use smaller padding factor to fit -1.5 to 1.5 mV range
+      const gridPaddingFactor = 0.2;
       const extendedPixelsPerMV = pixelsPerMV * (1 + gridPaddingFactor);
 
-
-      const minDisplayY = Math.max(leadTop, centerY - (maxVoltage * extendedPixelsPerMV));
-      const maxDisplayY = Math.min(leadBottom, centerY - (minVoltage * extendedPixelsPerMV));
 
       // Draw grid for this lead 
       ctx.strokeStyle = '#ff6b6b';
@@ -793,7 +473,6 @@ const ECGViewer = () => {
         const voltage = samples[i] / 1000; // Convert to mV
         const y = centerY - (voltage * extendedPixelsPerMV);
 
-
         const clampedY = Math.max(leadTop, Math.min(leadBottom, y));
 
         if (i === 0) {
@@ -850,7 +529,6 @@ const ECGViewer = () => {
     ctx.fillStyle = '#718096';
     ctx.textAlign = 'center';
 
-
     const lastLeadBottom = paddingTop + leadHeight + leadSpacing + leadHeight;
     const timeLabelsY = lastLeadBottom + 20;
 
@@ -902,7 +580,7 @@ const ECGViewer = () => {
     const rect = canvas.getBoundingClientRect();
 
     // Three-section layout: selected lead + Lead II reference
-    const paddingLeft = 55;
+    const paddingLeft = 80; // Increased from 55 to provide more space for Y-axis labels
     const paddingBottom = 80;
     const paddingTop = 35;
     const paddingRight = 50;
@@ -911,15 +589,19 @@ const ECGViewer = () => {
     const contentWidth = rect.width - paddingLeft - paddingRight;
     const contentHeight = rect.height - paddingTop - paddingBottom;
     const totalLeads = 2; // Selected lead + Lead II reference
-    const minLeadHeight = 120; // Minimum height per lead
+    const minLeadHeight = 200; // Increased minimum height per lead to accommodate -1.5 to 1.5 mV range
     const availableHeight = contentHeight - leadSpacing;
     const calculatedLeadHeight = availableHeight / totalLeads;
     const leadHeight = Math.max(minLeadHeight, calculatedLeadHeight); // Ensure minimum height
 
+    // Calculate required canvas height based on actual lead heights
+    const requiredCanvasHeight = paddingTop + (leadHeight * totalLeads) + leadSpacing + paddingBottom;
+    const actualCanvasHeight = Math.max(rect.height, requiredCanvasHeight);
+
     canvas.width = rect.width * window.devicePixelRatio;
-    canvas.height = rect.height * window.devicePixelRatio;
+    canvas.height = actualCanvasHeight * window.devicePixelRatio;
     ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-    ctx.clearRect(0, 0, rect.width, rect.height);
+    ctx.clearRect(0, 0, rect.width, actualCanvasHeight);
 
     const pixelsPerMM = 5;
     const pixelsPerSecond = mmPerSecond * pixelsPerMM;
@@ -932,8 +614,6 @@ const ECGViewer = () => {
 
     const smallGridSizeX = smallGridTime * pixelsPerSecond;
     const largeGridSizeX = largeGridTime * pixelsPerSecond;
-    const smallGridSizeY = smallGridVoltage * pixelsPerMV;
-    const largeGridSizeY = largeGridVoltage * pixelsPerMV;
 
     ctx.fillStyle = '#fefefe';
     ctx.fillRect(0, 0, rect.width, rect.height);
@@ -968,20 +648,18 @@ const ECGViewer = () => {
       const centerY = leadTop + leadHeight / 2;
 
       // Calculate voltage range for this lead
-      const actualMinVoltage = Math.min(...samples) / 1000;
-      const actualMaxVoltage = Math.max(...samples) / 1000;
 
       let minVoltage, maxVoltage;
-      minVoltage = Math.min(-1.5, Math.floor(actualMinVoltage / 0.5) * 0.5);
-      maxVoltage = Math.max(1.5, Math.ceil(actualMaxVoltage / 0.5) * 0.5);
+      // For single/dual lead mode, always use fixed range of -1.5 to 1.5 mV
+      minVoltage = -1.5;
+      maxVoltage = 1.5;
 
-      const voltageRange = Math.max(Math.abs(minVoltage), maxVoltage);
-      const gridPaddingFactor = 0.8;
+      // For single/dual lead mode, use smaller padding factor to fit -1.5 to 1.5 mV range
+      const gridPaddingFactor = 0.2;
       const extendedPixelsPerMV = pixelsPerMV * (1 + gridPaddingFactor);
 
+
       // Clamp visible Y range to the lead band
-      const minDisplayY = Math.max(leadTop, centerY - (maxVoltage * extendedPixelsPerMV));
-      const maxDisplayY = Math.min(leadBottom, centerY - (minVoltage * extendedPixelsPerMV));
 
       // Draw grid for this lead
       ctx.strokeStyle = '#ff6b6b';
@@ -1099,7 +777,6 @@ const ECGViewer = () => {
     ctx.fillStyle = '#718096';
     ctx.textAlign = 'center';
 
-
     const lead2ReferenceBottom = paddingTop + leadHeight + leadSpacing + leadHeight; // bottom of Lead II reference
     const timeLabelsY = lead2ReferenceBottom + 20;
 
@@ -1144,7 +821,6 @@ const ECGViewer = () => {
     const paddingBottom = 80;
     const paddingTop = 35;
     const paddingRight = 50;
-    const leadSpacing = 0;
 
     canvas.width = rect.width * window.devicePixelRatio;
     canvas.height = rect.height * window.devicePixelRatio;
@@ -1155,11 +831,10 @@ const ECGViewer = () => {
     const contentHeight = rect.height - paddingTop - paddingBottom;
 
     const pixelsPerMM = 5;
-    const pixelsPerSecond = mmPerSecond * pixelsPerMM; // 25→125 px/s
-    const pixelsPerMV = mmPerMV * pixelsPerMM;
+    const pixelsPerSecond = mmPerSecond * pixelsPerMM;
+    const pixelsPerMV = mmPerMV * pixelsPerMM; // 25→125 px/s
 
     const smallGridTime = 0.04, largeGridTime = 0.2;
-    const smallGridVoltage = 0.1, largeGridVoltage = 0.5;
     const smallGridSizeX = smallGridTime * pixelsPerSecond;
     const largeGridSizeX = largeGridTime * pixelsPerSecond;
 
@@ -1429,8 +1104,9 @@ const ECGViewer = () => {
       const leadBottom = leadTop + leadHeight;
       const centerY = leadTop + leadHeight / 2;
 
-      const actualMinVoltage = Math.min(...samples) / 1000;
-      const actualMaxVoltage = Math.max(...samples) / 1000;
+      const actualMinVoltage = Math.min(...samples) / 1000; // convert to mV
+      const actualMaxVoltage = Math.max(...samples) / 1000; // convert to mV
+
       const minVoltage = Math.min(-1.5, Math.floor(actualMinVoltage / 0.5) * 0.5);
       const maxVoltage = Math.max(1.5, Math.ceil(actualMaxVoltage / 0.5) * 0.5);
 
@@ -1539,7 +1215,7 @@ const ECGViewer = () => {
     const rect = canvas.getBoundingClientRect();
 
     // Three-section layout: two selected leads + Lead II reference
-    const paddingLeft = 55;
+    const paddingLeft = 80; // Increased from 55 to provide more space for Y-axis labels
     const paddingBottom = 80;
     const paddingTop = 35;
     const paddingRight = 50;
@@ -1548,15 +1224,19 @@ const ECGViewer = () => {
     const contentWidth = rect.width - paddingLeft - paddingRight;
     const contentHeight = rect.height - paddingTop - paddingBottom;
     const totalLeads = 3; // Two selected leads + Lead II reference
-    const minLeadHeight = 120; // Minimum height per lead
+    const minLeadHeight = 180; // Increased minimum height per lead to accommodate -1.5 to 1.5 mV range
     const availableHeight = contentHeight - leadSpacing * (totalLeads - 1);
     const calculatedLeadHeight = availableHeight / totalLeads;
     const leadHeight = Math.max(minLeadHeight, calculatedLeadHeight); // Ensure minimum height
 
+    // Calculate required canvas height based on actual lead heights
+    const requiredCanvasHeight = paddingTop + (leadHeight * totalLeads) + (leadSpacing * (totalLeads - 1)) + paddingBottom;
+    const actualCanvasHeight = Math.max(rect.height, requiredCanvasHeight);
+
     canvas.width = rect.width * window.devicePixelRatio;
-    canvas.height = rect.height * window.devicePixelRatio;
+    canvas.height = actualCanvasHeight * window.devicePixelRatio;
     ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-    ctx.clearRect(0, 0, rect.width, rect.height);
+    ctx.clearRect(0, 0, rect.width, actualCanvasHeight);
 
     const pixelsPerMM = 5;
     const pixelsPerSecond = mmPerSecond * pixelsPerMM;
@@ -1569,8 +1249,6 @@ const ECGViewer = () => {
 
     const smallGridSizeX = smallGridTime * pixelsPerSecond;
     const largeGridSizeX = largeGridTime * pixelsPerSecond;
-    const smallGridSizeY = smallGridVoltage * pixelsPerMV;
-    const largeGridSizeY = largeGridVoltage * pixelsPerMV;
 
     ctx.fillStyle = '#fefefe';
     ctx.fillRect(0, 0, rect.width, rect.height);
@@ -1605,20 +1283,17 @@ const ECGViewer = () => {
       const centerY = leadTop + leadHeight / 2;
 
       // Calculate voltage range for this lead
-      const actualMinVoltage = Math.min(...samples) / 1000;
-      const actualMaxVoltage = Math.max(...samples) / 1000;
 
       let minVoltage, maxVoltage;
-      minVoltage = Math.min(-1.5, Math.floor(actualMinVoltage / 0.5) * 0.5);
-      maxVoltage = Math.max(1.5, Math.ceil(actualMaxVoltage / 0.5) * 0.5);
+      // For single/dual lead mode, always use fixed range of -1.5 to 1.5 mV
+      minVoltage = -1.5;
+      maxVoltage = 1.5;
 
-      const voltageRange = Math.max(Math.abs(minVoltage), maxVoltage);
-      const gridPaddingFactor = 0.8;
+      // For single/dual lead mode, use smaller padding factor to fit -1.5 to 1.5 mV range
+      const gridPaddingFactor = 0.2;
       const extendedPixelsPerMV = pixelsPerMV * (1 + gridPaddingFactor);
 
       // Clamp visible Y range to the lead band
-      const minDisplayY = Math.max(leadTop, centerY - (maxVoltage * extendedPixelsPerMV));
-      const maxDisplayY = Math.min(leadBottom, centerY - (minVoltage * extendedPixelsPerMV));
 
       // Draw grid for this lead
       ctx.strokeStyle = '#ff6b6b';
@@ -1777,7 +1452,6 @@ const ECGViewer = () => {
       const sopClassUid = dataSet.string('x00080016');
       const modality = dataSet.string('x00080060');
 
-
       const container = document.getElementById(containerId);
       if (!container) {
         return;
@@ -1810,16 +1484,6 @@ const ECGViewer = () => {
       // otherwise use required width to enable scrolling
       const canvasWidth = Math.max(requiredWidth, containerWidth);
       canvas.style.width = `${canvasWidth}px`;
-
-      // Debug: Log dimensions for troubleshooting
-      console.log('ECG Canvas Debug:', {
-        containerWidth,
-        requiredWidth,
-        canvasWidth,
-        willNeedScroll: canvasWidth > containerWidth,
-        pixelsPerSecond,
-        tenSecondsWidth: 10 * pixelsPerSecond
-      });
 
       // Adjust height based on lead selection - dynamic calculation
       if (isMultipleMode) {
@@ -1926,7 +1590,6 @@ const ECGViewer = () => {
         setDicomTags(tags);
         setDicomArrayBuffer(response); // Save arrayBuffer for subsequent reloading
 
-
         await loadDicomFile(response);
       } catch (error) {
         message.error(error.message || 'Failed to load ECG file');
@@ -2010,7 +1673,6 @@ const ECGViewer = () => {
     };
   }, [currentCanvasId, dicomArrayBuffer, loadDicomFile]);
 
-
   const handleViewConverted = async () => {
     if (!convertedDicomUrl) return;
 
@@ -2069,8 +1731,6 @@ const ECGViewer = () => {
       message.destroy();
     }
   };
-
-  // Removed per-row interpretation handler; use multi-select Interpret button above instead
 
   // Build disease options from AI diagnosis tag (x00104000)
   const getAvailableDiseases = React.useMemo(() => {
@@ -2168,7 +1828,6 @@ const ECGViewer = () => {
             </div>
           )}
         </div>
-
 
         {error && (
           <div style={{ color: '#ff4d4f' }}>
