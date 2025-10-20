@@ -559,10 +559,16 @@ const PatientDetail = () => {
                                         const parts = patientComments.split('|');
                                         const predictions = [];
 
-                                        // Process each part (usually first part is main predictions, second part is ResNet)
+                                        // Process each part (first part is 1D Model, second part is ResNet, third part is HuBERT-Head)
                                         parts.forEach((part, partIndex) => {
-                                          const isResNet = part.includes('ResNet');
-                                          const title = isResNet ? 'ResNet Model Predictions' : '1D Model Results';
+                                          let title;
+                                          if (part.includes('ResNet')) {
+                                            title = 'ResNet Model Predictions';
+                                          } else if (part.includes('HuBERT-Head')) {
+                                            title = 'HuBERT-Head Results';
+                                          } else {
+                                            title = '1D Model Results';
+                                          }
 
                                           // Extract the disease:probability pairs
                                           const pairs = [];

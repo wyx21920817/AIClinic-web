@@ -2245,7 +2245,7 @@ const ECGViewer = () => {
             )}
             {dicomTags['x00104000'] ? (
               <Row gutter={16}>
-                <Col span={12}>
+                <Col span={8}>
                   <Card type="inner" title="1D Model Results">
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                       <thead>
@@ -2275,7 +2275,7 @@ const ECGViewer = () => {
                     </table>
                   </Card>
                 </Col>
-                <Col span={12}>
+                <Col span={8}>
                   <Card type="inner" title="ResNet Top5 Results">
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                       <thead>
@@ -2288,6 +2288,37 @@ const ECGViewer = () => {
                       <tbody>
                         {(dicomTags['x00104000']?.split(' | ')[1] || "")
                           .replace('ResNet Top5: ', '')
+                          .split('; ')
+                          .filter(Boolean)
+                          .map(item => {
+                            const [type, prob] = item.split(':');
+                            return (
+                              <tr key={type}>
+                                <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>{type}</td>
+                                <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                                  {prob ? `${(parseFloat(prob) * 100).toFixed(1)}%` : 'N/A'}
+                                </td>
+
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </Card>
+                </Col>
+                <Col span={8}>
+                  <Card type="inner" title="HuBERT-Head Results">
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr>
+                          <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Type</th>
+                          <th style={{ padding: '8px', borderBottom: '1px solid #f0f0f0', textAlign: 'left' }}>Probability</th>
+
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(dicomTags['x00104000']?.split(' | ')[2] || "")
+                          .replace('HuBERT-Head: ', '')
                           .split('; ')
                           .filter(Boolean)
                           .map(item => {
