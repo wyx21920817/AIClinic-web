@@ -122,9 +122,7 @@ const Login = () => {
         const role = getUserRole();
         if (role === 'doctor') {
           navigate('/doctor-home');
-        } else if (role === 'admin') {
-          navigate('/admin-home');
-        } else {
+        }  else {
           navigate('/dashboard');
         }
       } catch (e) {
