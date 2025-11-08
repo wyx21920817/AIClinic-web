@@ -87,7 +87,6 @@ const RoleTest = () => {
                 >
                   <Option value={USER_ROLES.DOCTOR}>Doctor</Option>
                   <Option value={USER_ROLES.ADMIN}>Administrator</Option>
-                  <Option value={USER_ROLES.USER}>User</Option>
                 </Select>
               </div>
               <Alert

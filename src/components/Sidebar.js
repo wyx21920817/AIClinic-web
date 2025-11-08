@@ -44,12 +44,12 @@ const Sidebar = () => {
     // Test Deliverables menu removed
     // XAI Demo menu removed
     // ECG AI Results Demo menu removed
-    {
-      key: '/role-test',
-      icon: <UserOutlined />,
-      label: 'Role Test',
-      onClick: () => navigate('/role-test'),
-    },
+    // {
+    //   key: '/role-test',
+    //   icon: <UserOutlined />,
+    //   label: 'Role Test',
+    //   onClick: () => navigate('/role-test'),
+    // },
     {
       key: '/account',
       icon: <UserOutlined />,
